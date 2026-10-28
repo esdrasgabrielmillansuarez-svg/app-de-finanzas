@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.suarezmillan.finanzas.core.currency.CurrencyQuote
 import com.suarezmillan.finanzas.core.currency.CurrencyRates
+import com.suarezmillan.finanzas.core.currency.LiveRate
+import com.suarezmillan.finanzas.core.currency.remote.ExchangeRateUpdater
+import com.suarezmillan.finanzas.core.currency.remote.RateRefreshState
 import com.suarezmillan.finanzas.core.fx.FxSource
 import com.suarezmillan.finanzas.core.receipt.ReceiptAnalysis
 import com.suarezmillan.finanzas.core.receipt.ReceiptScanner
@@ -89,6 +92,7 @@ class MainViewModel @Inject constructor(
     private val rates: CurrencyRates,
     private val receiptScanner: ReceiptScanner,
     private val reminderScheduler: ReminderScheduler,
+    private val rateUpdater: ExchangeRateUpdater,
 ) : ViewModel() {
 
     private val monthKey = monthKeyOf(System.currentTimeMillis())
@@ -122,6 +126,16 @@ class MainViewModel @Inject constructor(
     val quotes: StateFlow<List<CurrencyQuote>> = rates.quotesFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), rates.quotes())
 
+    /** Última cotización oficial del BCV (o null si todavía no se pudo traer). */
+    val liveRate: StateFlow<LiveRate?> = settings.liveRate
+
+    val rateRefresh: StateFlow<RateRefreshState> = rateUpdater.state
+
+    init {
+        // Intento silencioso al abrir: si la caché es reciente o no hay red, no molesta.
+        viewModelScope.launch { rateUpdater.refresh(force = false) }
+    }
+
     private data class CurrencyContext(
         val base: String,
         val secondary: String,
@@ -142,7 +156,8 @@ class MainViewModel @Inject constructor(
         settings.baseCurrency,
         settings.secondaryCurrency,
         settings.manualUnitsPerUsd,
-    ) { base, secondary, _ ->
+        settings.liveRate,
+    ) { base, secondary, _, _ ->
         CurrencyContext(
             base = base,
             secondary = secondary,
@@ -308,6 +323,11 @@ class MainViewModel @Inject constructor(
     fun setManualRate(code: String, unitsPerUsd: Double) = settings.setManualRate(code, unitsPerUsd)
 
     fun clearManualRate(code: String) = settings.clearManualRate(code)
+
+    /** Fuerza (o deja pasar) una actualización de la cotización oficial del BCV. */
+    fun refreshRates(force: Boolean = true) {
+        viewModelScope.launch { rateUpdater.refresh(force) }
+    }
 
     // ------------------------------------------------------------------ apariencia
 

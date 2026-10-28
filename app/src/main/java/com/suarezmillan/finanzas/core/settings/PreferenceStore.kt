@@ -10,8 +10,12 @@ package com.suarezmillan.finanzas.core.settings
 interface PreferenceStore {
     fun getString(key: String): String?
     fun getBoolean(key: String, fallback: Boolean): Boolean
+    fun getLong(key: String, fallback: Long): Long
+    fun getDouble(key: String, fallback: Double): Double
     fun putString(key: String, value: String)
     fun putBoolean(key: String, value: Boolean)
+    fun putLong(key: String, value: Long)
+    fun putDouble(key: String, value: Double)
 }
 
 /** Implementación volátil: tests y previews. */
@@ -22,10 +26,16 @@ class InMemoryPreferenceStore(
 
     private val values = initial.toMutableMap()
     private val booleans = initialBooleans.toMutableMap()
+    private val longs = mutableMapOf<String, Long>()
+    private val doubles = mutableMapOf<String, Double>()
 
     override fun getString(key: String): String? = values[key]
 
     override fun getBoolean(key: String, fallback: Boolean): Boolean = booleans[key] ?: fallback
+
+    override fun getLong(key: String, fallback: Long): Long = longs[key] ?: fallback
+
+    override fun getDouble(key: String, fallback: Double): Double = doubles[key] ?: fallback
 
     override fun putString(key: String, value: String) {
         values[key] = value
@@ -33,5 +43,13 @@ class InMemoryPreferenceStore(
 
     override fun putBoolean(key: String, value: Boolean) {
         booleans[key] = value
+    }
+
+    override fun putLong(key: String, value: Long) {
+        longs[key] = value
+    }
+
+    override fun putDouble(key: String, value: Double) {
+        doubles[key] = value
     }
 }

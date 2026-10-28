@@ -57,6 +57,50 @@ class CurrencyRatesTest {
     }
 
     @Test
+    fun `la cotizacion BCV manda sobre la referencia offline`() {
+        val settings = AppSettings(InMemoryPreferenceStore())
+        val rates = CurrencyRates(settings)
+        val now = System.currentTimeMillis()
+
+        settings.setLiveRate(LiveRate(900.0, now, "BCV"))
+
+        assertEquals(900.0, rates.rate("USD", "VES"), 1e-9)
+        val ves = rates.quote("VES")
+        assertTrue(ves.isLive)
+        assertEquals(now, ves.liveUpdatedAtMillis)
+        assertFalse(ves.isManual)
+        // El euro sigue derivándose del pivote USD.
+        assertEquals(900.0 / 0.92, rates.rate("EUR", "VES"), 0.0001)
+    }
+
+    @Test
+    fun `una tasa manual manda sobre la cotizacion BCV`() {
+        val settings = AppSettings(InMemoryPreferenceStore())
+        val rates = CurrencyRates(settings)
+
+        settings.setLiveRate(LiveRate(900.0, System.currentTimeMillis(), "BCV"))
+        settings.setManualRate("VES", 950.0)
+
+        assertEquals(950.0, rates.rate("USD", "VES"), 1e-9)
+        assertTrue(rates.quote("VES").isManual)
+        assertFalse(rates.quote("VES").isLive)
+
+        settings.clearManualRate("VES")
+        assertEquals(900.0, rates.rate("USD", "VES"), 1e-9)
+        assertTrue(rates.quote("VES").isLive)
+    }
+
+    @Test
+    fun `sin red la referencia del bolivar sigue siendo la ultima conocida`() {
+        val settings = AppSettings(InMemoryPreferenceStore())
+        val rates = CurrencyRates(settings)
+
+        // Recién instalada y sin internet: la tabla de arranque, no un cero.
+        assertEquals(CurrencyCatalog.unitsPerUsd("VES"), rates.rate("USD", "VES"), 1e-9)
+        assertFalse(rates.quote("VES").isLive)
+    }
+
+    @Test
     fun `catalogo cubre paises y busca por pais`() {
         assertTrue(CurrencyCatalog.all.size >= 40)
         assertTrue(CurrencyCatalog.search("españa").any { it.code == "EUR" })

@@ -67,7 +67,9 @@ object CurrencyCatalog {
         CurrencyInfo("UYU", "Peso uruguayo", "\$U", Region.AMERICA, 40.5, countries("Uruguay" to "🇺🇾")),
         CurrencyInfo("PYG", "Guaraní", "₲", Region.AMERICA, 7_450.0, countries("Paraguay" to "🇵🇾")),
         CurrencyInfo("BOB", "Boliviano", "Bs", Region.AMERICA, 6.9, countries("Bolivia" to "🇧🇴")),
-        CurrencyInfo("VES", "Bolívar", "Bs.", Region.AMERICA, 45.0, countries("Venezuela" to "🇻🇪")),
+        // Referencia de arranque (28/10/2026). En producción se reemplaza por la
+        // cotización oficial del BCV en cuanto la app tiene red y la guarda en caché.
+        CurrencyInfo("VES", "Bolívar", "Bs.", Region.AMERICA, 888.1183, countries("Venezuela" to "🇻🇪")),
         CurrencyInfo("CRC", "Colón costarricense", "₡", Region.AMERICA, 510.0, countries("Costa Rica" to "🇨🇷")),
         CurrencyInfo("DOP", "Peso dominicano", "RD\$", Region.AMERICA, 60.0, countries("República Dominicana" to "🇩🇴")),
         CurrencyInfo("GTQ", "Quetzal", "Q", Region.AMERICA, 7.7, countries("Guatemala" to "🇬🇹")),

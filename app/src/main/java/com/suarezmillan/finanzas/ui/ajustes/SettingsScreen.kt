@@ -191,7 +191,7 @@ fun SettingsScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline)
                 SettingRow("Almacenamiento", "local")
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-                SettingRow("Nube", "desactivada")
+                SettingRow("Conexión", "solo tasa BCV")
 
                 TextButton(onClick = onExportCsv, modifier = Modifier.padding(top = 6.dp)) {
                     Text("Exportar movimientos (CSV)")
@@ -204,7 +204,8 @@ fun SettingsScreen(
                     )
                 }
                 Text(
-                    "Esta versión no declara permiso de INTERNET: tus datos no salen del teléfono. " +
+                    "La app solo se conecta para traer la cotización oficial del BCV. " +
+                        "Movimientos, facturas y perfil nunca salen del teléfono. " +
                         "El CSV se comparte solo cuando tú eliges el destino.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -230,7 +231,7 @@ fun SettingsScreen(
 
         item {
             Text(
-                "Finanzas 0.2.0 · offline-first",
+                "Finanzas 0.3.0 - offline-first",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

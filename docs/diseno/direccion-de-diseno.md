@@ -346,11 +346,13 @@ Alineado con este documento:
 - Tokens en `ui/theme/` (color, tipografía, forma, movimiento) con el concepto **Grafito + dos tintas**.
 - **Entrada con perfil local**: registro/login con nombre, correo y contraseña
   (PBKDF2-HMAC-SHA256, 120.000 iteraciones, sal por usuario), sesión recordada y
-  salida desde Ajustes. Sin servidor, sin permiso de INTERNET.
+  salida desde Ajustes. Sin servidor; `INTERNET` se usa solo para la cotización
+  oficial del BCV.
 - Hoja de registro con teclado 4×4, aritmética inline (`12+450`), chips de categoría, divisa por chip y deshacer.
 - Hoy (saldo por divisa, "te queda este mes", proyección estimada), Movimientos con búsqueda y filtros de tipo/divisa, Plan (sobres + pagos programados) y Ajustes.
 - Detalle de movimiento (duplicar / eliminar con deshacer) desde Hoy y Movimientos.
 - Divisas: catálogo de ~55 monedas agrupadas por país/región, equivalencia en USD y EUR, base/secundaria y tasa manual por divisa.
+- **Dólar BCV**: cotización oficial del bolívar (VES) obtenida del espejo público del Banco Central de Venezuela, cacheada con fecha visible; una tasa manual siempre tiene prioridad.
 - Facturas: OCR en el dispositivo (ML Kit, modelo empaquetado) + parser determinista que precarga importe, comercio, categoría y divisa.
 - Exportación CSV de movimientos vía FileProvider (el usuario elige el destino) y borrado masivo con confirmación.
 - **Apariencia**: modo claro/oscuro/sistema y seis temas con selector en vivo; el acento no altera la semántica de divisa. Persistido en `PreferenceStore`.

@@ -88,6 +88,8 @@ fun FinanzasRoot(
     val payments by vm.payments.collectAsStateWithLifecycle()
     val receipt by vm.receipt.collectAsStateWithLifecycle()
     val quotes by vm.quotes.collectAsStateWithLifecycle()
+    val liveRate by vm.liveRate.collectAsStateWithLifecycle()
+    val rateRefresh by vm.rateRefresh.collectAsStateWithLifecycle()
     val movements by vm.movements.collectAsStateWithLifecycle()
     val themeMode by vm.themeMode.collectAsStateWithLifecycle()
     val themePreset by vm.themePreset.collectAsStateWithLifecycle()
@@ -199,6 +201,9 @@ fun FinanzasRoot(
             quotes = quotes,
             baseCurrency = state.baseCurrency,
             secondaryCurrency = state.secondaryCurrency,
+            liveRate = liveRate,
+            refreshState = rateRefresh,
+            onRefreshRate = { vm.refreshRates(force = true) },
             onBack = { showCurrencies = false },
             onSetBase = { vm.setBaseCurrency(it) },
             onSetSecondary = { vm.setSecondaryCurrency(it) },

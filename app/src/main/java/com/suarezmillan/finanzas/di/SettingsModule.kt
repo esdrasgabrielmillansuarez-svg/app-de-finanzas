@@ -22,12 +22,27 @@ class SharedPreferenceStore @Inject constructor(
     override fun getBoolean(key: String, fallback: Boolean): Boolean =
         prefs.getBoolean(key, fallback)
 
+    override fun getLong(key: String, fallback: Long): Long = prefs.getLong(key, fallback)
+
+    // Se guarda como texto: SharedPreferences solo tiene float y perdería
+    // decimales de una tasa como 888,1183.
+    override fun getDouble(key: String, fallback: Double): Double =
+        prefs.getString(key, null)?.toDoubleOrNull() ?: fallback
+
     override fun putString(key: String, value: String) {
         prefs.edit().putString(key, value).apply()
     }
 
     override fun putBoolean(key: String, value: Boolean) {
         prefs.edit().putBoolean(key, value).apply()
+    }
+
+    override fun putLong(key: String, value: Long) {
+        prefs.edit().putLong(key, value).apply()
+    }
+
+    override fun putDouble(key: String, value: Double) {
+        prefs.edit().putString(key, value.toString()).apply()
     }
 
     private companion object {

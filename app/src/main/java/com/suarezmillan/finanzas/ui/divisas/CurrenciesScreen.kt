@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,15 +42,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.suarezmillan.finanzas.core.currency.CurrencyQuote
+import com.suarezmillan.finanzas.core.currency.LiveRate
 import com.suarezmillan.finanzas.core.currency.Region
+import com.suarezmillan.finanzas.core.currency.remote.RateRefreshState
 import com.suarezmillan.finanzas.core.money.MoneyFormat
 
 /**
  * Catálogo completo de divisas, agrupado por región y con los países que usan
  * cada una. Cada fila muestra cuánto vale **1 unidad en USD y en EUR**.
  *
- * Las tasas son una referencia offline incluida en la app; el usuario puede
- * fijar una manual (se marca con `manual`).
+ * La referencia es offline, excepto el bolívar (VES), que se actualiza con la
+ * cotización oficial del BCV cuando hay red. Una tasa manual siempre gana.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +60,9 @@ fun CurrenciesScreen(
     quotes: List<CurrencyQuote>,
     baseCurrency: String,
     secondaryCurrency: String,
+    liveRate: LiveRate?,
+    refreshState: RateRefreshState,
+    onRefreshRate: () -> Unit,
     onBack: () -> Unit,
     onSetBase: (String) -> Unit,
     onSetSecondary: (String) -> Unit,
@@ -94,6 +101,14 @@ fun CurrenciesScreen(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             item {
+                BcvRateCard(
+                    liveRate = liveRate,
+                    state = refreshState,
+                    onRefresh = onRefreshRate,
+                )
+            }
+
+            item {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
@@ -106,8 +121,8 @@ fun CurrenciesScreen(
 
             item {
                 Text(
-                    text = "Referencia offline incluida en la app · ${quotes.size} divisas. " +
-                        "Fija una tasa manual si tu país cotiza distinto.",
+                    text = "Dólar BCV en vivo para VES · el resto es referencia offline " +
+                        "(${quotes.size} divisas). Fija una tasa manual si tu país cotiza distinto.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 8.dp),
@@ -177,6 +192,78 @@ fun CurrenciesScreen(
 }
 
 @Composable
+private fun BcvRateCard(
+    liveRate: LiveRate?,
+    state: RateRefreshState,
+    onRefresh: () -> Unit,
+) {
+    Card(
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Dólar BCV",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (liveRate != null) {
+                        Text(
+                            "1 USD = ${MoneyFormat.formatRate(liveRate.unitsPerUsd)} VES",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            relativeTime(liveRate.fetchedAtMillis),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        Text(
+                            "Sin cotización todavía",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            "Toca actualizar cuando tengas conexión.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                TextButton(onClick = onRefresh, enabled = !state.loading) {
+                    if (state.loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Text("Actualizar")
+                    }
+                }
+            }
+            if (state.error != null) {
+                Text(
+                    state.error,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+            Text(
+                "Fuente: Banco Central de Venezuela (espejo oficial). " +
+                    "Solo se envía un GET anónimo.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+    }
+}
+
+@Composable
 private fun CurrencyRow(
     quote: CurrencyQuote,
     isBase: Boolean,
@@ -208,6 +295,7 @@ private fun CurrencyRow(
                     if (isBase) Badge("base")
                     if (isSecondary) Badge("2ª")
                     if (quote.isManual) Badge("manual")
+                    if (quote.isLive) Badge("BCV")
                 }
                 Text(
                     text = countries.ifEmpty { quote.name },
@@ -292,6 +380,14 @@ private fun CurrencyDetailDialog(
                         modifier = Modifier.padding(top = 6.dp),
                     )
                 }
+                if (quote.isLive && quote.liveUpdatedAtMillis != null) {
+                    Text(
+                        "Cotización oficial BCV · ${relativeTime(quote.liveUpdatedAtMillis)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
                 Spacer(Modifier.height(16.dp))
                 Column(horizontalAlignment = Alignment.End, modifier = Modifier.fillMaxWidth()) {
                     if (!isBase && !isSecondary) {
@@ -331,6 +427,17 @@ private fun RateLine(left: String, right: String) {
             modifier = Modifier.weight(1f),
         )
         Text(text = right, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/** "actualizado hace 3 h": suficiente para un dato que cambia una vez al día. */
+private fun relativeTime(millis: Long): String {
+    val minutes = ((System.currentTimeMillis() - millis) / 60_000).coerceAtLeast(0)
+    return when {
+        minutes < 1 -> "actualizado recién"
+        minutes < 60 -> "actualizado hace $minutes min"
+        minutes < 24 * 60 -> "actualizado hace ${minutes / 60} h"
+        else -> "actualizado hace ${minutes / (24 * 60)} días"
     }
 }
 

@@ -1,8 +1,8 @@
 # Finanzas — MVP Android (offline-first)
 
 App de finanzas personales **bimoneda** para Android, con entrada en menos de 3
-segundos y **cero red**: no declara permiso de `INTERNET`. Kotlin + Compose +
-Room + Hilt.
+segundos y **offline-first**: todo funciona sin red y solo se usa `INTERNET`
+para traer la cotización oficial del BCV. Kotlin + Compose + Room + Hilt.
 
 - Dirección de diseño: [`docs/diseno/direccion-de-diseno.md`](docs/diseno/direccion-de-diseno.md)
 - Prototipo navegable (HTML): [`prototipo/prototipo.html`](prototipo/prototipo.html)
@@ -85,7 +85,10 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
 **Divisas**
 - Catálogo de ~55 monedas con país, bandera y región.
 - Equivalencia en **USD** y **EUR** por unidad.
-- Elegir base y secundaria; fijar tasa manual o volver a la de referencia.
+- **Dólar BCV en vivo** para el bolívar (VES): se actualiza al abrir la app y con
+  el botón *Actualizar*, se guarda en caché y muestra cuándo se obtuvo.
+- Elegir base y secundaria; fijar tasa manual (siempre gana sobre la del BCV) o
+  volver a la de referencia.
 
 ## Estructura
 
@@ -97,7 +100,7 @@ app/src/main/java/com/suarezmillan/finanzas/
 │   ├── auth/                   # PasswordHasher (PBKDF2), AuthValidation
 │   ├── coach/CoachEngine.kt    # mensajes/stickers contextuales (JVM puro)
 │   ├── money/Money.kt          # unidades menores + formato es-AR
-│   ├── currency/               # catálogo de ~55 divisas + tasas (USD pivot)
+│   ├── currency/               # catálogo de ~55 divisas + tasas (USD pivot) + BCV remoto
 │   ├── receipt/                # ReceiptParser (heurística) + ReceiptScanner (ML Kit)
 │   ├── export/                 # CsvExporter + shareCsv (FileProvider)
 │   ├── reminder/               # WorkManager diario + notificación de vencimientos
@@ -134,7 +137,7 @@ app/src/main/java/com/suarezmillan/finanzas/
 | Una cuenta = una divisa | El saldo deja de ser una suma de tasas distintas. |
 | Importes firmados (`gasto` negativo, `ingreso` positivo) | Un `SUM` cuadra cualquier cuenta, incluidas transferencias. |
 | Transferencias = dos filas unidas por `transferGroupId` | Cada cuenta cuadra por separado; conversión explícita. |
-| `AndroidManifest` **sin** permiso `INTERNET` | Offline-first de verdad, no "offline con letra chica". |
+| `INTERNET` solo para la cotización oficial del BCV | El resto es offline de verdad: movimientos, facturas y perfil no salen del teléfono. |
 | Sin Material You dinámico | El color codifica divisa; el wallpaper no puede decidirlo. |
 | `MoneyText` como único formateador | Importes con cifras tabulares y formato es-AR en un solo lugar. |
 | Migraciones Room escritas a mano | Los movimientos del usuario no son recuperables. |
@@ -157,11 +160,14 @@ app/src/main/java/com/suarezmillan/finanzas/
 - `AuthValidationTest` — nombre, correo normalizado, contraseña mínima.
 - `CsvExporterTest` — cabecera, decimales y escapado RFC 4180.
 - `CoachEngineTest` — prioridad de vencimientos, sobres, hitos y rotación de variantes.
+- `BcvRateParserTest` — parser del BCV, rechazo de fuente no oficial y caché de 6 h.
+- `LiveRateSettingsTest` — la cotización BCV se persiste y sobrevive al reinicio.
 
-**38 tests, 0 fallos** en `:app:testDebugUnitTest`.
+**49 tests, 0 fallos** en `:app:testDebugUnitTest`.
 
 ## Qué falta (a propósito)
 
+- Otras cotizaciones (paralelo/MEP/CCL) y actualización en segundo plano de la tasa.
 - Edición de movimientos ya guardados (hoy: duplicar/eliminar).
 - CRUD de cuentas; el registro usa `acc-cash` / `acc-usd` fijos.
 - Deudas: entidad y DAO listos, **sin UI**.

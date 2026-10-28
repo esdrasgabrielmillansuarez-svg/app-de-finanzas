@@ -1,6 +1,7 @@
 package com.suarezmillan.finanzas.core.settings
 
 import com.suarezmillan.finanzas.core.currency.CurrencyCatalog
+import com.suarezmillan.finanzas.core.currency.LiveRate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,6 +48,20 @@ class AppSettings @Inject constructor(
         store.getBoolean(KEY_REMINDERS, true),
     )
     val remindersEnabled: StateFlow<Boolean> = _remindersEnabled.asStateFlow()
+
+    /** Última cotización externa (hoy solo el dólar oficial del BCV). */
+    private val _liveRate = MutableStateFlow(
+        store.getDouble(KEY_LIVE_RATE, 0.0)
+            .takeIf { it > 0.0 && !it.isNaN() && !it.isInfinite() }
+            ?.let { unitsPerUsd ->
+                LiveRate(
+                    unitsPerUsd = unitsPerUsd,
+                    fetchedAtMillis = store.getLong(KEY_LIVE_AT, 0L),
+                    source = store.getString(KEY_LIVE_SOURCE) ?: "BCV",
+                )
+            },
+    )
+    val liveRate: StateFlow<LiveRate?> = _liveRate.asStateFlow()
 
     fun setBaseCurrency(code: String) {
         val normalized = code.trim().uppercase()
@@ -99,9 +114,22 @@ class AppSettings @Inject constructor(
         store.putBoolean(KEY_REMINDERS, enabled)
     }
 
+    // ------------------------------------------------------------------ cotización BCV
+
+    fun setLiveRate(rate: LiveRate) {
+        if (!rate.isFresh) return
+        _liveRate.value = rate
+        store.putDouble(KEY_LIVE_RATE, rate.unitsPerUsd)
+        store.putLong(KEY_LIVE_AT, rate.fetchedAtMillis)
+        store.putString(KEY_LIVE_SOURCE, rate.source)
+    }
+
     private companion object {
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_THEME_PRESET = "theme_preset"
         const val KEY_REMINDERS = "reminders_enabled"
+        const val KEY_LIVE_RATE = "live_ves_units_per_usd"
+        const val KEY_LIVE_AT = "live_ves_fetched_at"
+        const val KEY_LIVE_SOURCE = "live_ves_source"
     }
 }

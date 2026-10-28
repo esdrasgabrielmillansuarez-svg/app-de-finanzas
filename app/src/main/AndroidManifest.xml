@@ -2,9 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-      La app es offline-first: NO se declara INTERNET a propósito.
-      Si algún día se añade sync opcional, se declara aquí y solo con consentimiento explícito.
+      La app funciona offline. INTERNET se usa solo para traer la cotización
+      oficial del BCV (espejo ve.dolarapi.com). Movimientos, facturas y perfil
+      nunca salen del teléfono.
     -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!--
       Recordatorios locales de vencimientos (WorkManager + notificación).
