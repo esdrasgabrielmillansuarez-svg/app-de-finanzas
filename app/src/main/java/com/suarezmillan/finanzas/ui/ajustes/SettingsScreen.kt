@@ -1,16 +1,23 @@
 package com.suarezmillan.finanzas.ui.ajustes
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -20,12 +27,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.suarezmillan.finanzas.core.money.MoneyFormat
+import com.suarezmillan.finanzas.core.settings.ThemeMode
+import com.suarezmillan.finanzas.core.settings.ThemePreset
 import com.suarezmillan.finanzas.ui.HomeUiState
 import com.suarezmillan.finanzas.ui.components.ConfirmDialog
 import com.suarezmillan.finanzas.ui.theme.Peligro
+import com.suarezmillan.finanzas.ui.theme.presetSwatch
 
 @Composable
 fun SettingsScreen(
@@ -33,12 +44,19 @@ fun SettingsScreen(
     userName: String,
     userEmail: String,
     movementCount: Int,
+    themeMode: ThemeMode,
+    themePreset: ThemePreset,
+    remindersEnabled: Boolean,
+    onThemeMode: (ThemeMode) -> Unit,
+    onThemePreset: (ThemePreset) -> Unit,
+    onReminders: (Boolean) -> Unit,
     onOpenCurrencies: () -> Unit,
     onExportCsv: () -> Unit,
     onClearMovements: () -> Unit,
     onLogout: () -> Unit,
 ) {
     var confirmClear by remember { mutableStateOf(false) }
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
@@ -67,6 +85,58 @@ fun SettingsScreen(
         }
 
         item {
+            Section("Apariencia") {
+                Text(
+                    "Modo",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ThemeMode.entries.forEach { mode ->
+                        FilterChip(
+                            selected = themeMode == mode,
+                            onClick = { onThemeMode(mode) },
+                            label = { Text(mode.label, maxLines = 1) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                Text(
+                    "Tema",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 14.dp),
+                )
+                ThemePreset.entries.chunked(3).forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        row.forEach { preset ->
+                            PresetCell(
+                                preset = preset,
+                                selected = themePreset == preset,
+                                dark = dark,
+                                modifier = Modifier.weight(1f),
+                                onClick = { onThemePreset(preset) },
+                            )
+                        }
+                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+                Text(
+                    "El tema tiñe la marca y las superficies: divisas y flujos conservan su color.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        }
+
+        item {
             Section("Divisas") {
                 SettingRow("Base", state.baseCurrency)
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline)
@@ -85,6 +155,32 @@ fun SettingsScreen(
                     "La tasa se guarda por movimiento: cambiarla no reescribe el pasado.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        item {
+            Section("Recordatorios") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Avisos de vencimientos", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Una notificación al día si hay pagos cerca.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = remindersEnabled, onCheckedChange = onReminders)
+                }
+                Text(
+                    "Se revisa a las 9:00 con WorkManager, sin conexión. " +
+                        "Podés desactivarlo cuando quieras.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
         }
@@ -206,5 +302,36 @@ private fun SettingRow(label: String, value: String, badge: String? = null) {
                 )
             }
         }
+    }
+}
+
+/** Muestra de tema: círculo de acento + nombre, seleccionable. */
+@Composable
+private fun PresetCell(
+    preset: ThemePreset,
+    selected: Boolean,
+    dark: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = modifier.clickable(onClick = onClick).padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = presetSwatch(preset, dark),
+            border = BorderStroke(
+                width = if (selected) 3.dp else 1.dp,
+                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+            ),
+            modifier = Modifier.size(34.dp),
+        ) {}
+        Text(
+            text = preset.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }

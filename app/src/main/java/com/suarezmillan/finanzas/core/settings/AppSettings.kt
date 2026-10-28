@@ -10,11 +10,15 @@ import javax.inject.Singleton
 /**
  * Preferencias de la app.
  *
- * TODO(Fase 1, Sprint 3): mover a DataStore. La forma de estas APIs no cambia,
- * solo el almacenamiento.
+ * La apariencia y los recordatorios se persisten ya vía [PreferenceStore]
+ * (lectura síncrona al arrancar). Divisas y tasas siguen en memoria.
+ *
+ * TODO(Sprint 4): mover todo a DataStore; la forma de estas APIs no cambia.
  */
 @Singleton
-class AppSettings @Inject constructor() {
+class AppSettings @Inject constructor(
+    private val store: PreferenceStore,
+) {
 
     private val _baseCurrency = MutableStateFlow("ARS")
     val baseCurrency: StateFlow<String> = _baseCurrency.asStateFlow()
@@ -28,6 +32,21 @@ class AppSettings @Inject constructor() {
      */
     private val _manualUnitsPerUsd = MutableStateFlow<Map<String, Double>>(emptyMap())
     val manualUnitsPerUsd: StateFlow<Map<String, Double>> = _manualUnitsPerUsd.asStateFlow()
+
+    private val _themeMode = MutableStateFlow(
+        ThemeMode.fromId(store.getString(KEY_THEME_MODE)),
+    )
+    val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
+    private val _themePreset = MutableStateFlow(
+        ThemePreset.fromId(store.getString(KEY_THEME_PRESET)),
+    )
+    val themePreset: StateFlow<ThemePreset> = _themePreset.asStateFlow()
+
+    private val _remindersEnabled = MutableStateFlow(
+        store.getBoolean(KEY_REMINDERS, true),
+    )
+    val remindersEnabled: StateFlow<Boolean> = _remindersEnabled.asStateFlow()
 
     fun setBaseCurrency(code: String) {
         val normalized = code.trim().uppercase()
@@ -57,4 +76,32 @@ class AppSettings @Inject constructor() {
 
     fun isManual(code: String): Boolean =
         _manualUnitsPerUsd.value.containsKey(code.trim().uppercase())
+
+    // ------------------------------------------------------------------ apariencia
+
+    fun setThemeMode(mode: ThemeMode) {
+        if (_themeMode.value == mode) return
+        _themeMode.value = mode
+        store.putString(KEY_THEME_MODE, mode.id)
+    }
+
+    fun setThemePreset(preset: ThemePreset) {
+        if (_themePreset.value == preset) return
+        _themePreset.value = preset
+        store.putString(KEY_THEME_PRESET, preset.id)
+    }
+
+    // ------------------------------------------------------------------ recordatorios
+
+    fun setRemindersEnabled(enabled: Boolean) {
+        if (_remindersEnabled.value == enabled) return
+        _remindersEnabled.value = enabled
+        store.putBoolean(KEY_REMINDERS, enabled)
+    }
+
+    private companion object {
+        const val KEY_THEME_MODE = "theme_mode"
+        const val KEY_THEME_PRESET = "theme_preset"
+        const val KEY_REMINDERS = "reminders_enabled"
+    }
 }

@@ -6,6 +6,12 @@
       Si algún día se añade sync opcional, se declara aquí y solo con consentimiento explícito.
     -->
 
+    <!--
+      Recordatorios locales de vencimientos (WorkManager + notificación).
+      No abre ninguna conexión: solo muestra lo que ya está en Room.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".FinanzasApp"
         android:allowBackup="false"

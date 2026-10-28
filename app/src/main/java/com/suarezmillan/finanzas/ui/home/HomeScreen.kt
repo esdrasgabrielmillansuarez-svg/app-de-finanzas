@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.suarezmillan.finanzas.core.coach.CoachAction
+import com.suarezmillan.finanzas.core.coach.CoachMessage
 import com.suarezmillan.finanzas.data.local.entity.TxnEntity
 import com.suarezmillan.finanzas.ui.HomeUiState
 import com.suarezmillan.finanzas.ui.components.MoneyText
@@ -39,6 +41,9 @@ private val txnDayFormat = DateTimeFormatter.ofPattern("d MMM", Locale("es", "AR
 fun HomeScreen(
     state: HomeUiState,
     userName: String,
+    coach: CoachMessage,
+    onAnotherCoach: () -> Unit,
+    onCoachAction: (CoachAction) -> Unit,
     onOpenPlan: () -> Unit,
     onOpenCurrencies: () -> Unit,
     onTxnClick: (TxnEntity) -> Unit,
@@ -63,6 +68,15 @@ fun HomeScreen(
                     style = MaterialTheme.typography.titleLarge,
                 )
             }
+        }
+
+        // 0. Sticker contextual (cambia según vencimientos, sobres y hábito)
+        item {
+            StickerCard(
+                message = coach,
+                onAnother = onAnotherCoach,
+                onAction = onCoachAction,
+            )
         }
 
         // 1. Saldo consolidado

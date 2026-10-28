@@ -34,6 +34,8 @@ class TxnRepositoryImpl @Inject constructor(
 
     override suspend fun add(txn: TxnEntity) = txnDao.upsert(txn)
 
+    override suspend fun count(): Int = txnDao.count()
+
     override suspend fun delete(txn: TxnEntity) = txnDao.delete(txn)
 
     override suspend fun deleteAll() = txnDao.deleteAll()

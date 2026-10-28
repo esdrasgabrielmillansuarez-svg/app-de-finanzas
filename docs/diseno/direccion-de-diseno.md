@@ -112,6 +112,32 @@ Base neutra oscura (los números brillan, no los adornos) y **el color identific
 
 Material Symbols Rounded, 24 dp, peso 400. Categorías siempre icono + texto (nunca icono solo en formularios).
 
+### Temas y voz
+
+**Temas.** Seis presets (Grafito, Océano, Bosque, Atardecer, Lavanda, Monocromo)
+y modo Sistema/Claro/Oscuro. El preset toca **solo** `primary`, `onPrimary`,
+`primaryContainer` y `onPrimaryContainer`; las superficies, la semántica de flujo
+y los colores de divisa quedan fijos. Regla: *el tema es la marca, el color de
+divisa es información*.
+
+**Stickers.** Emoji grande en un círculo rotado −8° con sombra, frase de una idea
+y una acción concreta. Cambian con Crossfade solo cuando cambia el mensaje.
+El motor (`core/coach/CoachEngine.kt`) prioriza:
+
+1. Pago vencido / vence hoy → aviso con acción "Ver plan".
+2. Pago en los próximos 3 días.
+3. Sobre excedido → aviso sin culpa ("no es el fin del mundo").
+4. Sobre al 80–100 %.
+5. Sin movimientos → invitar a anotar el primero.
+6. Presupuesto mensual excedido.
+7. Mes ganador cerca del cierre (celebración).
+8. Sprint final ajustado (≥ 85 %).
+9. Aliento general rotativo.
+
+Anti-patrones: culpa, alarmismo, más de una idea por mensaje, repetir el genérico
+cuando hay un dato concreto. Los textos son constantes testeables en JVM, no
+generados en la nube.
+
 ---
 
 ## 4. Arquitectura de información
@@ -327,6 +353,9 @@ Alineado con este documento:
 - Divisas: catálogo de ~55 monedas agrupadas por país/región, equivalencia en USD y EUR, base/secundaria y tasa manual por divisa.
 - Facturas: OCR en el dispositivo (ML Kit, modelo empaquetado) + parser determinista que precarga importe, comercio, categoría y divisa.
 - Exportación CSV de movimientos vía FileProvider (el usuario elige el destino) y borrado masivo con confirmación.
+- **Apariencia**: modo claro/oscuro/sistema y seis temas con selector en vivo; el acento no altera la semántica de divisa. Persistido en `PreferenceStore`.
+- **Sticker contextual** en Hoy (`CoachEngine` + `StickerCard`) con rotación de variantes y mensajes de hito al guardar.
+- **Recordatorios** diarios de vencimientos con WorkManager + notificación resumen, permiso de notificaciones pedido solo cuando corresponde e interruptor en Ajustes.
 - Room v2 con siete entidades y migración `1 → 2` escrita a mano (nunca destructiva), tasa de cambio guardada **por transacción**.
 
 Deliberadamente pendiente: count-up animado del saldo, hápticos del teclado, bloqueo

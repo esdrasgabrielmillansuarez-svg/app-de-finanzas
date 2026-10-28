@@ -8,7 +8,10 @@ import com.suarezmillan.finanzas.core.currency.CurrencyRates
 import com.suarezmillan.finanzas.core.fx.FxSource
 import com.suarezmillan.finanzas.core.receipt.ReceiptAnalysis
 import com.suarezmillan.finanzas.core.receipt.ReceiptScanner
+import com.suarezmillan.finanzas.core.reminder.ReminderScheduler
 import com.suarezmillan.finanzas.core.settings.AppSettings
+import com.suarezmillan.finanzas.core.settings.ThemeMode
+import com.suarezmillan.finanzas.core.settings.ThemePreset
 import com.suarezmillan.finanzas.data.local.entity.CategoryEntity
 import com.suarezmillan.finanzas.data.local.entity.PaymentStatus
 import com.suarezmillan.finanzas.data.local.entity.Recurrence
@@ -85,6 +88,7 @@ class MainViewModel @Inject constructor(
     private val settings: AppSettings,
     private val rates: CurrencyRates,
     private val receiptScanner: ReceiptScanner,
+    private val reminderScheduler: ReminderScheduler,
 ) : ViewModel() {
 
     private val monthKey = monthKeyOf(System.currentTimeMillis())
@@ -95,6 +99,10 @@ class MainViewModel @Inject constructor(
 
     private val _lastSaved = MutableStateFlow<TxnEntity?>(null)
     val lastSaved: StateFlow<TxnEntity?> = _lastSaved.asStateFlow()
+
+    /** Total de movimientos al momento de guardar (mensajes de hito). */
+    private val _lastSavedCount = MutableStateFlow<Int?>(null)
+    val lastSavedCount: StateFlow<Int?> = _lastSavedCount.asStateFlow()
 
     private val _lastPaid = MutableStateFlow<PaidPayment?>(null)
     val lastPaid: StateFlow<PaidPayment?> = _lastPaid.asStateFlow()
@@ -201,10 +209,16 @@ class MainViewModel @Inject constructor(
         if (amountMinor <= 0L) return
         viewModelScope.launch {
             val txn = buildTxn(type, amountMinor, currency, categoryId, merchant)
-            txnRepository.add(txn)
-            _lastSaved.value = txn
+            publishSaved(txn)
             _receipt.value = ReceiptUiState.Idle
         }
+    }
+
+    /** Inserta y publica el conteo exacto antes de avisar (para el mensaje de hito). */
+    private suspend fun publishSaved(txn: TxnEntity) {
+        txnRepository.add(txn)
+        _lastSavedCount.value = txnRepository.count()
+        _lastSaved.value = txn
     }
 
     fun undoLast() {
@@ -212,11 +226,13 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             txnRepository.delete(txn)
             _lastSaved.value = null
+            _lastSavedCount.value = null
         }
     }
 
     fun clearLastSaved() {
         _lastSaved.value = null
+        _lastSavedCount.value = null
     }
 
     /** Repite un movimiento con la fecha de hoy (mismo importe, categoría y divisa). */
@@ -228,8 +244,7 @@ class MainViewModel @Inject constructor(
                 createdAt = System.currentTimeMillis(),
                 transferGroupId = null,
             )
-            txnRepository.add(copy)
-            _lastSaved.value = copy
+            publishSaved(copy)
         }
     }
 
@@ -293,6 +308,24 @@ class MainViewModel @Inject constructor(
     fun setManualRate(code: String, unitsPerUsd: Double) = settings.setManualRate(code, unitsPerUsd)
 
     fun clearManualRate(code: String) = settings.clearManualRate(code)
+
+    // ------------------------------------------------------------------ apariencia
+
+    val themeMode: StateFlow<ThemeMode> = settings.themeMode
+    val themePreset: StateFlow<ThemePreset> = settings.themePreset
+
+    fun setThemeMode(mode: ThemeMode) = settings.setThemeMode(mode)
+
+    fun setThemePreset(preset: ThemePreset) = settings.setThemePreset(preset)
+
+    // ------------------------------------------------------------------ recordatorios
+
+    val remindersEnabled: StateFlow<Boolean> = settings.remindersEnabled
+
+    fun setRemindersEnabled(enabled: Boolean) {
+        settings.setRemindersEnabled(enabled)
+        reminderScheduler.sync(enabled)
+    }
 
     // ------------------------------------------------------------------ presupuesto
 

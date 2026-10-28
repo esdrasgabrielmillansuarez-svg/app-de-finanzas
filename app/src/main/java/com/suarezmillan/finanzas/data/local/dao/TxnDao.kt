@@ -19,6 +19,10 @@ interface TxnDao {
     @Query("SELECT * FROM txns WHERE id = :id")
     suspend fun getById(id: String): TxnEntity?
 
+    /** Conteo exacto (para mensajes de hitos al guardar). */
+    @Query("SELECT COUNT(*) FROM txns")
+    suspend fun count(): Int
+
     /**
      * Suma firmada de una cuenta. Las piernas de transferencia se guardan con
      * signo (origen negativo, destino positivo), así que un simple SUM cuadra.

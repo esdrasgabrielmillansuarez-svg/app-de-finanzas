@@ -38,6 +38,8 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
 **Hoy**
 - Saldo por divisa (local y USD), "te queda este mes", proyección de cierre y
   últimos movimientos.
+- **Sticker contextual**: emoji + frase que cambia según vencimientos, sobres al
+  límite, presupuesto y hábito. Botón "Otro" para rotar variantes.
 - Pill de tasa → pantalla de divisas.
 
 **Registrar (FAB)**
@@ -60,10 +62,25 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
 
 **Ajustes**
 - Perfil y cierre de sesión.
+- **Apariencia**: modo Sistema/Claro/Oscuro y seis temas (Grafito, Océano,
+  Bosque, Atardecer, Lavanda, Monocromo). Se aplican al instante y se recuerdan
+  entre arranques.
+- **Recordatorios**: aviso diario de vencimientos (WorkManager a las 9:00), con
+  interruptor para apagarlo y permiso de notificaciones pedido solo cuando hay
+  algo que recordar.
 - Divisas base/secundaria y tasa (auto o manual por divisa).
 - **Exportar movimientos (CSV)** por el selector del sistema (FileProvider).
 - **Borrar todos los movimientos** con confirmación.
 - Estado honesto de seguridad: contraseña PBKDF2; biometría pendiente.
+
+**Voz de la app**
+- Mensajes contextuales y deterministas (sin nube): prioridad vencido → vence
+  hoy → próximo → sobre excedido → sobre al límite → primer movimiento →
+  presupuesto → celebración → aliento.
+- Hitos al guardar (1, 5, 10, 25, 50 y 100 movimientos) con emoji, nunca culpa
+  ni alarmismo.
+- El tono se inspira en las notificaciones de Duolingo: una idea por mensaje,
+  concreto, con acción; sin "¡estás fallando!".
 
 **Divisas**
 - Catálogo de ~55 monedas con país, bandera y región.
@@ -78,12 +95,14 @@ app/src/main/java/com/suarezmillan/finanzas/
 ├── MainActivity.kt             # edge-to-edge + RootGate
 ├── core/
 │   ├── auth/                   # PasswordHasher (PBKDF2), AuthValidation
+│   ├── coach/CoachEngine.kt    # mensajes/stickers contextuales (JVM puro)
 │   ├── money/Money.kt          # unidades menores + formato es-AR
 │   ├── currency/               # catálogo de ~55 divisas + tasas (USD pivot)
 │   ├── receipt/                # ReceiptParser (heurística) + ReceiptScanner (ML Kit)
 │   ├── export/                 # CsvExporter + shareCsv (FileProvider)
+│   ├── reminder/               # WorkManager diario + notificación de vencimientos
 │   ├── fx/Fx.kt                # FxRate, FxSource, conversión
-│   └── settings/AppSettings.kt # divisas y tasa (en memoria, TODO DataStore)
+│   └── settings/               # AppSettings + PreferenceStore (JVM testeable)
 ├── data/
 │   ├── local/
 │   │   ├── FinanzasDatabase.kt # v2
@@ -99,7 +118,8 @@ app/src/main/java/com/suarezmillan/finanzas/
     ├── auth/                   # AuthViewModel + AuthScreen
     ├── FinanzasRoot.kt         # Scaffold, tabs, FAB, hoja de registro, diálogo de detalle
     ├── MainViewModel.kt        # estado único del MVP
-    ├── home/ movs/ plan/ ajustes/ divisas/
+    ├── home/                   # Hoy + StickerCard
+    ├── movs/ plan/ ajustes/ divisas/
     ├── quick/                  # hoja de registro + AmountParser
     ├── components/             # MoneyText, ConfirmDialog
     └── theme/                  # Color, Type, Shape, Motion, Theme
@@ -120,6 +140,9 @@ app/src/main/java/com/suarezmillan/finanzas/
 | Migraciones Room escritas a mano | Los movimientos del usuario no son recuperables. |
 | PBKDF2 con sal y comparación en tiempo constante | Nunca se guarda la contraseña; una filtración de la DB no la revela. |
 | OCR local (ML Kit empaquetado) + parser propio | Sin subir facturas a ningún lado y con lógica testeable en JVM. |
+| El tema cambia **acento y superficies**, nunca el significado | USD sigue ámbar y la moneda local sigue cian: el color no deja de informar. |
+| Mensajes del coach deterministas y contextuales | Sin nube, sin IA impredecible y testeables; prioridad explícita por reglas. |
+| Recordatorios con WorkManager, no `AlarmManager` | No hace falta precisión al minuto ni permisos de alarmas exactas. |
 
 ## Tests
 
@@ -133,6 +156,9 @@ app/src/main/java/com/suarezmillan/finanzas/
 - `PasswordHasherTest` — hash/verificación, sal distinta, no reversible.
 - `AuthValidationTest` — nombre, correo normalizado, contraseña mínima.
 - `CsvExporterTest` — cabecera, decimales y escapado RFC 4180.
+- `CoachEngineTest` — prioridad de vencimientos, sobres, hitos y rotación de variantes.
+
+**38 tests, 0 fallos** en `:app:testDebugUnitTest`.
 
 ## Qué falta (a propósito)
 
@@ -141,7 +167,9 @@ app/src/main/java/com/suarezmillan/finanzas/
 - Deudas: entidad y DAO listos, **sin UI**.
 - SQLCipher (bloque comentado en `DatabaseModule`) + clave en Android Keystore.
 - Bloqueo biométrico (`androidx.biometric` ya está en dependencias).
-- DataStore para ajustes y sesión; `AppSettings` vive en memoria.
+- DataStore para divisas/tasas y sesión (apariencia y recordatorios ya persisten
+  en SharedPreferences).
+- Edición de los textos del coach desde la UI (hoy son constantes testeables).
 - Widget Glance + deep link `finanzas://registrar` (el manifiesto ya lo declara).
 - Backup propio cifrado (Auto Backup está **desactivado** para la base).
 
@@ -149,7 +177,7 @@ app/src/main/java/com/suarezmillan/finanzas/
 
 Fijadas a un set conservador y mutuamente compatible: Kotlin 2.0.21, AGP 8.7.3,
 Gradle 8.9, Compose BOM 2024.10.01, Room 2.6.1, Hilt 2.52, KSP 2.0.21-1.0.28,
-ML Kit Text Recognition 16.0.1.
+ML Kit Text Recognition 16.0.1 y WorkManager 2.9.1.
 
 Actualización recomendada cuando se quiera tocar el tema:
 

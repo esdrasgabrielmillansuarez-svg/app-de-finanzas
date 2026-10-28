@@ -2,6 +2,7 @@ package com.suarezmillan.finanzas.core.currency
 
 import com.suarezmillan.finanzas.core.money.MoneyFormat
 import com.suarezmillan.finanzas.core.settings.AppSettings
+import com.suarezmillan.finanzas.core.settings.InMemoryPreferenceStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -9,7 +10,7 @@ import org.junit.Test
 
 class CurrencyRatesTest {
 
-    private fun rates() = CurrencyRates(AppSettings())
+    private fun rates() = CurrencyRates(AppSettings(InMemoryPreferenceStore()))
 
     @Test
     fun `pivote por dolar`() {
@@ -42,7 +43,7 @@ class CurrencyRatesTest {
 
     @Test
     fun `una tasa manual manda sobre la referencia`() {
-        val settings = AppSettings()
+        val settings = AppSettings(InMemoryPreferenceStore())
         val rates = CurrencyRates(settings)
 
         settings.setManualRate("ARS", 2_000.0)

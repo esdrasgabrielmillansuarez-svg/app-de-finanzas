@@ -35,6 +35,16 @@ interface ScheduledPaymentDao {
     )
     fun observeUnpaid(): Flow<List<ScheduledPaymentEntity>>
 
+    /** Versión puntual para el worker de recordatorios (sin Flow). */
+    @Query(
+        """
+        SELECT * FROM scheduled_payments
+        WHERE status != 'PAID' AND dueAt < :untilMillis
+        ORDER BY dueAt
+        """,
+    )
+    suspend fun unpaidDue(untilMillis: Long): List<ScheduledPaymentEntity>
+
     @Query("SELECT * FROM scheduled_payments WHERE id = :id")
     suspend fun getById(id: String): ScheduledPaymentEntity?
 

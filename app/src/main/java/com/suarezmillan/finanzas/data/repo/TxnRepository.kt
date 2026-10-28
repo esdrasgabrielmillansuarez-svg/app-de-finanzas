@@ -26,6 +26,9 @@ interface TxnRepository {
 
     suspend fun add(txn: TxnEntity)
 
+    /** Total de movimientos guardados, para mensajes de hito. */
+    suspend fun count(): Int
+
     suspend fun delete(txn: TxnEntity)
 
     /** Borra todos los movimientos. Los sobres, pagos y perfil se conservan. */

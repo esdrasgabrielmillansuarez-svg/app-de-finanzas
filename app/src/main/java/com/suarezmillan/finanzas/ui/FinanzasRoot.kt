@@ -1,5 +1,10 @@
 package com.suarezmillan.finanzas.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -36,8 +41,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.suarezmillan.finanzas.core.coach.CoachAction
+import com.suarezmillan.finanzas.core.coach.CoachContext
+import com.suarezmillan.finanzas.core.coach.CoachEngine
+import com.suarezmillan.finanzas.core.coach.DuePayment
 import com.suarezmillan.finanzas.core.export.CsvExporter
 import com.suarezmillan.finanzas.core.export.shareCsv
 import com.suarezmillan.finanzas.data.local.entity.TxnEntity
@@ -48,6 +58,10 @@ import com.suarezmillan.finanzas.ui.movs.MovementsScreen
 import com.suarezmillan.finanzas.ui.movs.TxnDetailDialog
 import com.suarezmillan.finanzas.ui.plan.PlanScreen
 import com.suarezmillan.finanzas.ui.quick.QuickEntrySheet
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 
 private data class Tab(val label: String, val icon: ImageVector)
 
@@ -68,25 +82,79 @@ fun FinanzasRoot(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val lastSaved by vm.lastSaved.collectAsStateWithLifecycle()
+    val lastSavedCount by vm.lastSavedCount.collectAsStateWithLifecycle()
     val lastPaid by vm.lastPaid.collectAsStateWithLifecycle()
     val lastDeleted by vm.lastDeleted.collectAsStateWithLifecycle()
     val payments by vm.payments.collectAsStateWithLifecycle()
     val receipt by vm.receipt.collectAsStateWithLifecycle()
     val quotes by vm.quotes.collectAsStateWithLifecycle()
     val movements by vm.movements.collectAsStateWithLifecycle()
+    val themeMode by vm.themeMode.collectAsStateWithLifecycle()
+    val themePreset by vm.themePreset.collectAsStateWithLifecycle()
+    val remindersEnabled by vm.remindersEnabled.collectAsStateWithLifecycle()
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var quickOpen by rememberSaveable { mutableStateOf(false) }
     var showCurrencies by rememberSaveable { mutableStateOf(false) }
+    var coachVariant by rememberSaveable { mutableIntStateOf(0) }
+    var notificationAsked by rememberSaveable { mutableStateOf(false) }
     var detailTxn by remember { mutableStateOf<TxnEntity?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
 
+    // ------------------------------------------------------------------ sticker contextual
+    val today = LocalDate.now()
+    val zone = ZoneId.systemDefault()
+    fun daysUntil(millis: Long): Int = ChronoUnit.DAYS
+        .between(today, Instant.ofEpochMilli(millis).atZone(zone).toLocalDate())
+        .toInt()
+
+    val dueSoon = payments
+        .map { it to daysUntil(it.dueAt) }
+        .filter { it.second <= 3 }
+        .sortedBy { it.second }
+
+    val coachMessage = CoachEngine.message(
+        context = CoachContext(
+            movementCount = movements.size,
+            spentMinor = state.spentMinor,
+            budgetLimitMinor = state.budgetLimitMinor,
+            daysLeftInMonth = today.lengthOfMonth() - today.dayOfMonth + 1,
+            overBudgetEnvelopes = state.envelopes
+                .filter { it.currency == state.baseCurrency && it.isOver }
+                .map { it.name },
+            nearLimitEnvelopes = state.envelopes
+                .filter { it.currency == state.baseCurrency && it.isWarning }
+                .map { it.name },
+            duePayments = dueSoon.map { (payment, days) ->
+                DuePayment(payment.name, days, payment.currency)
+            },
+            currency = state.baseCurrency,
+        ),
+        variant = coachVariant,
+    )
+
+    // ------------------------------------------------------------------ permiso de notificaciones
+    val notificationPermission = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { notificationAsked = true }
+
+    LaunchedEffect(dueSoon.isNotEmpty(), remindersEnabled) {
+        if (dueSoon.isEmpty() || !remindersEnabled || notificationAsked) return@LaunchedEffect
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return@LaunchedEffect
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
     LaunchedEffect(lastSaved) {
         val txn = lastSaved ?: return@LaunchedEffect
         val label = txn.merchant?.takeIf { it.isNotBlank() } ?: "Movimiento"
+        val milestone = CoachEngine.milestone(lastSavedCount ?: 0)
         val result = snackbar.showSnackbar(
-            message = "$label guardado",
+            message = milestone ?: "🧾 $label guardado",
             actionLabel = "Deshacer",
             duration = SnackbarDuration.Short,
         )
@@ -96,7 +164,7 @@ fun FinanzasRoot(
     LaunchedEffect(lastPaid) {
         val paid = lastPaid ?: return@LaunchedEffect
         val result = snackbar.showSnackbar(
-            message = "${paid.payment.name} pagado",
+            message = "✅ ${paid.payment.name} pagado",
             actionLabel = "Deshacer",
             duration = SnackbarDuration.Short,
         )
@@ -106,7 +174,7 @@ fun FinanzasRoot(
     LaunchedEffect(lastDeleted) {
         val txn = lastDeleted ?: return@LaunchedEffect
         val result = snackbar.showSnackbar(
-            message = "Movimiento eliminado",
+            message = "🗑️ Movimiento eliminado",
             actionLabel = "Deshacer",
             duration = SnackbarDuration.Short,
         )
@@ -175,6 +243,14 @@ fun FinanzasRoot(
                 0 -> HomeScreen(
                     state = state,
                     userName = userName,
+                    coach = coachMessage,
+                    onAnotherCoach = { coachVariant++ },
+                    onCoachAction = { action ->
+                        when (action) {
+                            CoachAction.OPEN_PLAN -> tab = 2
+                            CoachAction.OPEN_QUICK -> quickOpen = true
+                        }
+                    },
                     onOpenPlan = { tab = 2 },
                     onOpenCurrencies = { showCurrencies = true },
                     onTxnClick = { detailTxn = it },
@@ -199,6 +275,12 @@ fun FinanzasRoot(
                     userName = userName,
                     userEmail = userEmail,
                     movementCount = movements.size,
+                    themeMode = themeMode,
+                    themePreset = themePreset,
+                    remindersEnabled = remindersEnabled,
+                    onThemeMode = { vm.setThemeMode(it) },
+                    onThemePreset = { vm.setThemePreset(it) },
+                    onReminders = { vm.setRemindersEnabled(it) },
                     onOpenCurrencies = { showCurrencies = true },
                     onExportCsv = { exportCsv() },
                     onClearMovements = { vm.clearAllMovements() },
