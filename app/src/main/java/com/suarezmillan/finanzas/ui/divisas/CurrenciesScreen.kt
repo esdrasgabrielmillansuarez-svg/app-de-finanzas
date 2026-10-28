@@ -1,7 +1,7 @@
 package com.suarezmillan.finanzas.ui.divisas
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,12 +14,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,15 +46,19 @@ import androidx.compose.ui.window.Dialog
 import com.suarezmillan.finanzas.core.currency.CurrencyQuote
 import com.suarezmillan.finanzas.core.currency.LiveRate
 import com.suarezmillan.finanzas.core.currency.Region
+import com.suarezmillan.finanzas.core.currency.VesReference
 import com.suarezmillan.finanzas.core.currency.remote.RateRefreshState
 import com.suarezmillan.finanzas.core.money.MoneyFormat
+import com.suarezmillan.finanzas.ui.components.ManualRateDialog
+import com.suarezmillan.finanzas.ui.components.timeAgo
 
 /**
  * Catálogo completo de divisas, agrupado por región y con los países que usan
  * cada una. Cada fila muestra cuánto vale **1 unidad en USD y en EUR**.
  *
- * La referencia es offline, excepto el bolívar (VES), que se actualiza con la
- * cotización oficial del BCV cuando hay red. Una tasa manual siempre gana.
+ * Referencias en vivo: BCV, paralelo y USDT para el bolívar; euro del BCE y
+ * peso argentino oficial. El resto es tabla offline. Una tasa manual siempre
+ * gana; la del bolívar se guarda por referencia.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,9 +66,12 @@ fun CurrenciesScreen(
     quotes: List<CurrencyQuote>,
     baseCurrency: String,
     secondaryCurrency: String,
-    liveRate: LiveRate?,
+    activeVesReference: VesReference,
+    vesReferences: Map<VesReference, LiveRate>,
+    vesManualRates: Map<VesReference, Double>,
     refreshState: RateRefreshState,
     onRefreshRate: () -> Unit,
+    onSelectVesReference: (VesReference) -> Unit,
     onBack: () -> Unit,
     onSetBase: (String) -> Unit,
     onSetSecondary: (String) -> Unit,
@@ -101,10 +110,13 @@ fun CurrenciesScreen(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             item {
-                BcvRateCard(
-                    liveRate = liveRate,
+                VesRateCard(
+                    activeVesReference = activeVesReference,
+                    vesReferences = vesReferences,
+                    vesManualRates = vesManualRates,
                     state = refreshState,
                     onRefresh = onRefreshRate,
+                    onSelectReference = onSelectVesReference,
                 )
             }
 
@@ -121,8 +133,9 @@ fun CurrenciesScreen(
 
             item {
                 Text(
-                    text = "Dólar BCV en vivo para VES · el resto es referencia offline " +
-                        "(${quotes.size} divisas). Fija una tasa manual si tu país cotiza distinto.",
+                    text = "Referencias en vivo: BCV, paralelo, USDT, EUR y ARS · " +
+                        "el resto es tabla offline (${quotes.size} divisas). " +
+                        "Fija una tasa manual si tu país cotiza distinto.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 8.dp),
@@ -147,6 +160,7 @@ fun CurrenciesScreen(
                         quote = quote,
                         isBase = quote.code == baseCurrency,
                         isSecondary = quote.code == secondaryCurrency,
+                        liveBadge = if (quote.code == "VES") activeVesReference.shortLabel else "live",
                         onClick = { selected = quote },
                     )
                 }
@@ -181,7 +195,17 @@ fun CurrenciesScreen(
 
     manualTarget?.let { quote ->
         ManualRateDialog(
-            quote = quote,
+            title = "Tasa manual",
+            question = if (quote.code == "VES") {
+                "¿Cuántos VES equivalen a ${activeVesReference.unitLabel}?"
+            } else {
+                "¿Cuántos ${quote.code} equivalen a 1 USD?"
+            },
+            fieldLabel = if (quote.code == "VES") {
+                "${activeVesReference.unitLabel} = VES"
+            } else {
+                "1 USD = ${quote.code}"
+            },
             onConfirm = { value ->
                 onSetManualRate(quote.code, value)
                 manualTarget = null
@@ -192,11 +216,23 @@ fun CurrenciesScreen(
 }
 
 @Composable
-private fun BcvRateCard(
-    liveRate: LiveRate?,
+private fun VesRateCard(
+    activeVesReference: VesReference,
+    vesReferences: Map<VesReference, LiveRate>,
+    vesManualRates: Map<VesReference, Double>,
     state: RateRefreshState,
     onRefresh: () -> Unit,
+    onSelectReference: (VesReference) -> Unit,
 ) {
+    val live = vesReferences[activeVesReference]
+    val manual = vesManualRates[activeVesReference]
+    val value = manual ?: live?.unitsPerUsd
+    val title = when (activeVesReference) {
+        VesReference.BCV -> "Dólar BCV"
+        VesReference.PARALELO -> "Dólar paralelo"
+        VesReference.USDT -> "USDT en Venezuela"
+    }
+
     Card(
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -206,18 +242,22 @@ private fun BcvRateCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        "Dólar BCV",
+                        if (manual != null) "$title · manual" else title,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (liveRate != null) {
+                    if (value != null) {
                         Text(
-                            "1 USD = ${MoneyFormat.formatRate(liveRate.unitsPerUsd)} VES",
+                            "${activeVesReference.unitLabel} = ${MoneyFormat.formatRate(value)} VES",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.SemiBold,
                         )
                         Text(
-                            relativeTime(liveRate.fetchedAtMillis),
+                            if (manual != null) {
+                                "fijada a mano en Ajustes"
+                            } else {
+                                timeAgo(live?.fetchedAtMillis ?: 0L)
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -227,7 +267,7 @@ private fun BcvRateCard(
                             style = MaterialTheme.typography.titleMedium,
                         )
                         Text(
-                            "Toca actualizar cuando tengas conexión.",
+                            "Toca actualizar o fija una tasa manual.",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -244,6 +284,23 @@ private fun BcvRateCard(
                     }
                 }
             }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                VesReference.entries.forEach { reference ->
+                    FilterChip(
+                        selected = reference == activeVesReference,
+                        onClick = { onSelectReference(reference) },
+                        label = { Text(reference.label) },
+                    )
+                }
+            }
+
             if (state.error != null) {
                 Text(
                     state.error,
@@ -253,8 +310,8 @@ private fun BcvRateCard(
                 )
             }
             Text(
-                "Fuente: Banco Central de Venezuela (espejo oficial). " +
-                    "Solo se envía un GET anónimo.",
+                "Fuentes: BCV, paralelo y USDT (estimado con el paralelo). " +
+                    "Solo GET anónimos; movimientos y facturas no salen del teléfono.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp),
@@ -268,6 +325,7 @@ private fun CurrencyRow(
     quote: CurrencyQuote,
     isBase: Boolean,
     isSecondary: Boolean,
+    liveBadge: String,
     onClick: () -> Unit,
 ) {
     val flags = quote.countries.take(2).joinToString(" ") { it.flag }
@@ -295,7 +353,7 @@ private fun CurrencyRow(
                     if (isBase) Badge("base")
                     if (isSecondary) Badge("2ª")
                     if (quote.isManual) Badge("manual")
-                    if (quote.isLive) Badge("BCV")
+                    if (quote.isLive) Badge(liveBadge)
                 }
                 Text(
                     text = countries.ifEmpty { quote.name },
@@ -372,6 +430,9 @@ private fun CurrencyDetailDialog(
                 RateLine("1 ${quote.code}", "${MoneyFormat.formatRate(quote.usdPerUnit)} USD")
                 RateLine("", "${MoneyFormat.formatRate(quote.eurPerUnit)} EUR")
                 RateLine("1 USD", "${MoneyFormat.formatRate(quote.unitsPerUsd)} ${quote.code}")
+                if (quote.code == "USDT") {
+                    RateLine("1 USDT", "≈ 1 USD (stablecoin)")
+                }
                 if (quote.isManual) {
                     Text(
                         "Tasa manual activa",
@@ -382,7 +443,8 @@ private fun CurrencyDetailDialog(
                 }
                 if (quote.isLive && quote.liveUpdatedAtMillis != null) {
                     Text(
-                        "Cotización oficial BCV · ${relativeTime(quote.liveUpdatedAtMillis)}",
+                        "Cotización ${quote.liveSource ?: "en vivo"} · " +
+                            timeAgo(quote.liveUpdatedAtMillis),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(top = 6.dp),
@@ -427,61 +489,5 @@ private fun RateLine(left: String, right: String) {
             modifier = Modifier.weight(1f),
         )
         Text(text = right, style = MaterialTheme.typography.bodyMedium)
-    }
-}
-
-/** "actualizado hace 3 h": suficiente para un dato que cambia una vez al día. */
-private fun relativeTime(millis: Long): String {
-    val minutes = ((System.currentTimeMillis() - millis) / 60_000).coerceAtLeast(0)
-    return when {
-        minutes < 1 -> "actualizado recién"
-        minutes < 60 -> "actualizado hace $minutes min"
-        minutes < 24 * 60 -> "actualizado hace ${minutes / 60} h"
-        else -> "actualizado hace ${minutes / (24 * 60)} días"
-    }
-}
-
-@Composable
-private fun ManualRateDialog(
-    quote: CurrencyQuote,
-    onConfirm: (Double) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var value by rememberSaveable { mutableStateOf("") }
-    val parsed = value.replace(',', '.').toDoubleOrNull()
-
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp,
-        ) {
-            Column(Modifier.padding(20.dp)) {
-                Text("Tasa manual", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "¿Cuántos ${quote.code} equivalen a 1 USD?",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = value,
-                    onValueChange = { value = it },
-                    label = { Text("1 USD = ${quote.code}") },
-                    singleLine = true,
-                    isError = value.isNotEmpty() && parsed == null,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                    TextButton(onClick = onDismiss) { Text("Cancelar") }
-                    TextButton(
-                        onClick = { parsed?.let(onConfirm) },
-                        enabled = parsed != null && parsed > 0.0,
-                    ) { Text("Guardar") }
-                }
-            }
-        }
     }
 }

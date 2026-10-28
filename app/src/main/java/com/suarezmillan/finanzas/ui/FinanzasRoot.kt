@@ -51,6 +51,7 @@ import com.suarezmillan.finanzas.core.coach.DuePayment
 import com.suarezmillan.finanzas.core.export.CsvExporter
 import com.suarezmillan.finanzas.core.export.shareCsv
 import com.suarezmillan.finanzas.data.local.entity.TxnEntity
+import com.suarezmillan.finanzas.ui.ajustes.RatesSettingsScreen
 import com.suarezmillan.finanzas.ui.ajustes.SettingsScreen
 import com.suarezmillan.finanzas.ui.divisas.CurrenciesScreen
 import com.suarezmillan.finanzas.ui.home.HomeScreen
@@ -88,7 +89,11 @@ fun FinanzasRoot(
     val payments by vm.payments.collectAsStateWithLifecycle()
     val receipt by vm.receipt.collectAsStateWithLifecycle()
     val quotes by vm.quotes.collectAsStateWithLifecycle()
-    val liveRate by vm.liveRate.collectAsStateWithLifecycle()
+    val vesReferences by vm.vesReferences.collectAsStateWithLifecycle()
+    val activeVesReference by vm.activeVesReference.collectAsStateWithLifecycle()
+    val vesManualRates by vm.vesManualRates.collectAsStateWithLifecycle()
+    val liveRates by vm.liveRates.collectAsStateWithLifecycle()
+    val manualRates by vm.manualRates.collectAsStateWithLifecycle()
     val rateRefresh by vm.rateRefresh.collectAsStateWithLifecycle()
     val movements by vm.movements.collectAsStateWithLifecycle()
     val themeMode by vm.themeMode.collectAsStateWithLifecycle()
@@ -98,6 +103,7 @@ fun FinanzasRoot(
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var quickOpen by rememberSaveable { mutableStateOf(false) }
     var showCurrencies by rememberSaveable { mutableStateOf(false) }
+    var showRates by rememberSaveable { mutableStateOf(false) }
     var coachVariant by rememberSaveable { mutableIntStateOf(0) }
     var notificationAsked by rememberSaveable { mutableStateOf(false) }
     var detailTxn by remember { mutableStateOf<TxnEntity?>(null) }
@@ -196,14 +202,38 @@ fun FinanzasRoot(
         )
     }
 
+    if (showRates) {
+        RatesSettingsScreen(
+            activeVesReference = activeVesReference,
+            vesReferences = vesReferences,
+            vesManualRates = vesManualRates,
+            liveRates = liveRates,
+            manualRates = manualRates,
+            refreshState = rateRefresh,
+            onBack = { showRates = false },
+            onSelectVesReference = { vm.setActiveVesReference(it) },
+            onSetVesManualRate = { reference, value ->
+                vm.setVesManualRate(reference, value)
+            },
+            onClearVesManualRate = { vm.clearVesManualRate(it) },
+            onSetManualRate = { code, value -> vm.setManualRate(code, value) },
+            onClearManualRate = { vm.clearManualRate(it) },
+            onRefresh = { vm.refreshRates(force = true) },
+        )
+        return
+    }
+
     if (showCurrencies) {
         CurrenciesScreen(
             quotes = quotes,
             baseCurrency = state.baseCurrency,
             secondaryCurrency = state.secondaryCurrency,
-            liveRate = liveRate,
+            activeVesReference = activeVesReference,
+            vesReferences = vesReferences,
+            vesManualRates = vesManualRates,
             refreshState = rateRefresh,
             onRefreshRate = { vm.refreshRates(force = true) },
+            onSelectVesReference = { vm.setActiveVesReference(it) },
             onBack = { showCurrencies = false },
             onSetBase = { vm.setBaseCurrency(it) },
             onSetSecondary = { vm.setSecondaryCurrency(it) },
@@ -283,10 +313,12 @@ fun FinanzasRoot(
                     themeMode = themeMode,
                     themePreset = themePreset,
                     remindersEnabled = remindersEnabled,
+                    vesReferenceLabel = activeVesReference.label,
                     onThemeMode = { vm.setThemeMode(it) },
                     onThemePreset = { vm.setThemePreset(it) },
                     onReminders = { vm.setRemindersEnabled(it) },
                     onOpenCurrencies = { showCurrencies = true },
+                    onOpenRates = { showRates = true },
                     onExportCsv = { exportCsv() },
                     onClearMovements = { vm.clearAllMovements() },
                     onLogout = onLogout,

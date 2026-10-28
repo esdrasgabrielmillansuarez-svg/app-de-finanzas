@@ -47,10 +47,12 @@ fun SettingsScreen(
     themeMode: ThemeMode,
     themePreset: ThemePreset,
     remindersEnabled: Boolean,
+    vesReferenceLabel: String,
     onThemeMode: (ThemeMode) -> Unit,
     onThemePreset: (ThemePreset) -> Unit,
     onReminders: (Boolean) -> Unit,
     onOpenCurrencies: () -> Unit,
+    onOpenRates: () -> Unit,
     onExportCsv: () -> Unit,
     onClearMovements: () -> Unit,
     onLogout: () -> Unit,
@@ -148,8 +150,13 @@ fun SettingsScreen(
                         "${MoneyFormat.formatRate(state.rate)} ${state.baseCurrency}",
                     badge = if (state.rateIsManual) "manual" else "auto",
                 )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                SettingRow("Referencia VES", vesReferenceLabel)
                 TextButton(onClick = onOpenCurrencies, modifier = Modifier.padding(top = 4.dp)) {
                     Text("Ver todas las divisas y sus equivalencias")
+                }
+                TextButton(onClick = onOpenRates, modifier = Modifier.padding(top = 2.dp)) {
+                    Text("Tasas de cambio: BCV, paralelo, USDT, EUR y ARS")
                 }
                 Text(
                     "La tasa se guarda por movimiento: cambiarla no reescribe el pasado.",
@@ -191,7 +198,7 @@ fun SettingsScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline)
                 SettingRow("Almacenamiento", "local")
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-                SettingRow("Conexión", "solo tasa BCV")
+                SettingRow("Conexión", "solo cotizaciones")
 
                 TextButton(onClick = onExportCsv, modifier = Modifier.padding(top = 6.dp)) {
                     Text("Exportar movimientos (CSV)")
@@ -204,9 +211,9 @@ fun SettingsScreen(
                     )
                 }
                 Text(
-                    "La app solo se conecta para traer la cotización oficial del BCV. " +
-                        "Movimientos, facturas y perfil nunca salen del teléfono. " +
-                        "El CSV se comparte solo cuando tú eliges el destino.",
+                    "La app solo se conecta para traer referencias públicas de cambio " +
+                        "(BCV, paralelo, EUR y ARS). Movimientos, facturas y perfil nunca " +
+                        "salen del teléfono. El CSV se comparte solo cuando tú eliges el destino.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
@@ -231,7 +238,7 @@ fun SettingsScreen(
 
         item {
             Text(
-                "Finanzas 0.3.0 - offline-first",
+                "Finanzas 0.4.0 - offline-first",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

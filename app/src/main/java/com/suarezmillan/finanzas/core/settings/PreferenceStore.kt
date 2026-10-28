@@ -16,6 +16,7 @@ interface PreferenceStore {
     fun putBoolean(key: String, value: Boolean)
     fun putLong(key: String, value: Long)
     fun putDouble(key: String, value: Double)
+    fun remove(key: String)
 }
 
 /** Implementación volátil: tests y previews. */
@@ -51,5 +52,12 @@ class InMemoryPreferenceStore(
 
     override fun putDouble(key: String, value: Double) {
         doubles[key] = value
+    }
+
+    override fun remove(key: String) {
+        values.remove(key)
+        booleans.remove(key)
+        longs.remove(key)
+        doubles.remove(key)
     }
 }

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.suarezmillan.finanzas.core.currency.CurrencyQuote
 import com.suarezmillan.finanzas.core.currency.CurrencyRates
 import com.suarezmillan.finanzas.core.currency.LiveRate
+import com.suarezmillan.finanzas.core.currency.VesReference
 import com.suarezmillan.finanzas.core.currency.remote.ExchangeRateUpdater
 import com.suarezmillan.finanzas.core.currency.remote.RateRefreshState
 import com.suarezmillan.finanzas.core.fx.FxSource
@@ -122,12 +123,18 @@ class MainViewModel @Inject constructor(
     private val _receipt = MutableStateFlow<ReceiptUiState>(ReceiptUiState.Idle)
     val receipt: StateFlow<ReceiptUiState> = _receipt.asStateFlow()
 
-    /** Catálogo completo con equivalentes en USD y EUR, recalculado si hay tasas manuales. */
+    /** Catálogo completo con equivalentes en USD y EUR, recalculado si cambia una tasa. */
     val quotes: StateFlow<List<CurrencyQuote>> = rates.quotesFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), rates.quotes())
 
-    /** Última cotización oficial del BCV (o null si todavía no se pudo traer). */
-    val liveRate: StateFlow<LiveRate?> = settings.liveRate
+    /** Referencias del bolívar: BCV, paralelo y USDT. */
+    val vesReferences: StateFlow<Map<VesReference, LiveRate>> = settings.vesReferences
+    val activeVesReference: StateFlow<VesReference> = settings.activeVesReference
+    val vesManualRates: StateFlow<Map<VesReference, Double>> = settings.vesManualRates
+
+    /** Otras referencias en vivo (EUR, ARS) y sus overrides manuales. */
+    val liveRates: StateFlow<Map<String, LiveRate>> = settings.liveRates
+    val manualRates: StateFlow<Map<String, Double>> = settings.manualUnitsPerUsd
 
     val rateRefresh: StateFlow<RateRefreshState> = rateUpdater.state
 
@@ -155,14 +162,13 @@ class MainViewModel @Inject constructor(
     private val context = combine(
         settings.baseCurrency,
         settings.secondaryCurrency,
-        settings.manualUnitsPerUsd,
-        settings.liveRate,
-    ) { base, secondary, _, _ ->
+        settings.ratesRevision,
+    ) { base, secondary, _ ->
         CurrencyContext(
             base = base,
             secondary = secondary,
             rate = rates.rate(secondary, base),
-            manual = settings.isManual(secondary),
+            manual = settings.isManual(base) || settings.isManual(secondary),
         )
     }
 
@@ -307,7 +313,7 @@ class MainViewModel @Inject constructor(
             fxRateToBase = if (isBase) null else rates.rate(currency, base),
             fxSource = when {
                 isBase -> FxSource.NONE
-                settings.isManual(currency) -> FxSource.MANUAL
+                settings.isManual(currency) || settings.isManual(base) -> FxSource.MANUAL
                 else -> FxSource.AUTO
             },
             fxTimestamp = if (isBase) null else System.currentTimeMillis(),
@@ -324,7 +330,14 @@ class MainViewModel @Inject constructor(
 
     fun clearManualRate(code: String) = settings.clearManualRate(code)
 
-    /** Fuerza (o deja pasar) una actualización de la cotización oficial del BCV. */
+    fun setActiveVesReference(reference: VesReference) = settings.setActiveVesReference(reference)
+
+    fun setVesManualRate(reference: VesReference, unitsPerUsd: Double) =
+        settings.setVesManualRate(reference, unitsPerUsd)
+
+    fun clearVesManualRate(reference: VesReference) = settings.clearVesManualRate(reference)
+
+    /** Fuerza (o deja pasar) una actualización de las referencias de cambio. */
     fun refreshRates(force: Boolean = true) {
         viewModelScope.launch { rateUpdater.refresh(force) }
     }

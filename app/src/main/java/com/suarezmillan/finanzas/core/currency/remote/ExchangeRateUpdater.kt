@@ -1,13 +1,15 @@
 package com.suarezmillan.finanzas.core.currency.remote
 
+import com.suarezmillan.finanzas.core.currency.FetchedRates
 import com.suarezmillan.finanzas.core.settings.AppSettings
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** Estado visible de la última actualización de la cotización BCV. */
+/** Estado visible de la última actualización de referencias. */
 data class RateRefreshState(
     val loading: Boolean = false,
     val error: String? = null,
@@ -15,13 +17,13 @@ data class RateRefreshState(
 )
 
 /**
- * Actualiza y cachea la cotización oficial del BCV.
+ * Actualiza y cachea las referencias de cambio.
  *
  * - No bloquea la UI: todo es suspendido y con timeout.
- * - Si ya hay una cotización de las últimas 6 horas, no vuelve a pedir salvo
- *   que el usuario toque "Actualizar".
- * - Si falla (sin red, sitio caído), conserva la última cotización conocida y
- *   expone un error corto para que la UI sea honesta.
+ * - Si las referencias tienen menos de 6 horas, no vuelve a pedir salvo que el
+ *   usuario toque "Actualizar".
+ * - Si falla parte de la descarga, conserva lo anterior; si falla todo, expone
+ *   un error corto y honesto.
  */
 @Singleton
 class ExchangeRateUpdater @Inject constructor(
@@ -32,12 +34,14 @@ class ExchangeRateUpdater @Inject constructor(
     private val _state = MutableStateFlow(RateRefreshState())
     val state: StateFlow<RateRefreshState> = _state.asStateFlow()
 
-    /** Devuelve true si trajo una cotización nueva. */
+    /** Devuelve true si trajo al menos una referencia nueva. */
     suspend fun refresh(force: Boolean = false): Boolean {
         val now = System.currentTimeMillis()
-        val cached = settings.liveRate.value
+        val cached = settings.allLiveRates()
 
-        if (!force && cached != null && isFreshEnough(cached.fetchedAtMillis, now)) {
+        if (!force && cached.size >= REQUIRED_REFERENCES &&
+            cached.values.all { isFreshEnough(it.fetchedAtMillis, now) }
+        ) {
             return false
         }
         if (_state.value.loading) return false
@@ -45,20 +49,21 @@ class ExchangeRateUpdater @Inject constructor(
         _state.value = RateRefreshState(loading = true, lastAttemptMillis = now)
 
         val fetched = try {
-            source.fetchBcvRate()
-        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            source.fetchRates()
+        } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            null
+            FetchedRates()
         }
-        return if (fetched != null) {
-            settings.setLiveRate(fetched)
+
+        return if (!fetched.isEmpty) {
+            settings.updateRates(fetched)
             _state.value = RateRefreshState(loading = false, lastAttemptMillis = now)
             true
         } else {
             _state.value = RateRefreshState(
                 loading = false,
-                error = "No se pudo conectar con el BCV. Se mantiene la última cotización.",
+                error = "No se pudo actualizar ninguna referencia. Se mantienen las últimas.",
                 lastAttemptMillis = now,
             )
             false
@@ -66,8 +71,11 @@ class ExchangeRateUpdater @Inject constructor(
     }
 
     companion object {
-        /** Seis horas: suficiente para el día sin castigar la batería ni el API. */
+        /** Seis horas: suficiente para el día sin castigar la batería ni los APIs. */
         const val MAX_AGE_MILLIS = 6L * 60L * 60L * 1000L
+
+        /** VES + EUR + ARS. */
+        const val REQUIRED_REFERENCES = 3
 
         fun isFreshEnough(fetchedAtMillis: Long, nowMillis: Long): Boolean {
             val age = nowMillis - fetchedAtMillis

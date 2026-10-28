@@ -1,7 +1,7 @@
 package com.suarezmillan.finanzas.core.currency
 
 /**
- * Cotización obtenida desde una fuente externa (hoy, el dólar oficial del BCV).
+ * Cotización obtenida desde una fuente externa (BCV, paralelo, BCE, ARS…).
  *
  * Se guarda completa para poder seguir mostrando el último valor conocido
  * aunque no haya red, y para decir con honestidad cuándo se actualizó.

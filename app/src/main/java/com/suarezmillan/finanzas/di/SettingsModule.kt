@@ -45,6 +45,10 @@ class SharedPreferenceStore @Inject constructor(
         prefs.edit().putString(key, value.toString()).apply()
     }
 
+    override fun remove(key: String) {
+        prefs.edit().remove(key).apply()
+    }
+
     private companion object {
         const val PREFS = "finanzas_settings"
     }

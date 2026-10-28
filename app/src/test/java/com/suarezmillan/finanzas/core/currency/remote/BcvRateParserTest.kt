@@ -31,10 +31,33 @@ class BcvRateParserTest {
     }
 
     @Test
-    fun `rechaza cualquier fuente que no sea oficial`() {
+    fun `parsea el paralelo con su etiqueta`() {
+        val json = """{"moneda":"USD","fuente":"paralelo","promedio":1004.02693}"""
+
+        val rate = BcvRateParser.parse(
+            json = json,
+            expectedSource = "paralelo",
+            sourceLabel = "Paralelo",
+            fetchedAtMillis = 9L,
+        )
+
+        assertEquals(1_004.02693, rate!!.unitsPerUsd, 1e-9)
+        assertEquals("Paralelo", rate.source)
+        assertEquals(9L, rate.fetchedAtMillis)
+    }
+
+    @Test
+    fun `rechaza cualquier fuente que no sea la esperada`() {
         val paralelo = officialJson.replace("\"oficial\"", "\"paralelo\"")
 
         assertNull(BcvRateParser.parse(paralelo))
+        assertNull(
+            BcvRateParser.parse(
+                officialJson,
+                expectedSource = "paralelo",
+                sourceLabel = "Paralelo",
+            ),
+        )
     }
 
     @Test

@@ -70,6 +70,9 @@ object CurrencyCatalog {
         // Referencia de arranque (28/10/2026). En producción se reemplaza por la
         // cotización oficial del BCV en cuanto la app tiene red y la guarda en caché.
         CurrencyInfo("VES", "Bolívar", "Bs.", Region.AMERICA, 888.1183, countries("Venezuela" to "🇻🇪")),
+        // USDT no es una moneda ISO, pero en Venezuela se usa como referencia de
+        // dólar digital. Su valor en VES sale de la referencia activa del bolívar.
+        CurrencyInfo("USDT", "Tether (USDT)", "USDT", Region.AMERICA, 1.0, countries("Venezuela" to "🇻🇪")),
         CurrencyInfo("CRC", "Colón costarricense", "₡", Region.AMERICA, 510.0, countries("Costa Rica" to "🇨🇷")),
         CurrencyInfo("DOP", "Peso dominicano", "RD\$", Region.AMERICA, 60.0, countries("República Dominicana" to "🇩🇴")),
         CurrencyInfo("GTQ", "Quetzal", "Q", Region.AMERICA, 7.7, countries("Guatemala" to "🇬🇹")),

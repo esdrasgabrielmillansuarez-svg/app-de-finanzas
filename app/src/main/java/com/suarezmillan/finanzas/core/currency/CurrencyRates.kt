@@ -2,7 +2,7 @@ package com.suarezmillan.finanzas.core.currency
 
 import com.suarezmillan.finanzas.core.settings.AppSettings
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlin.math.roundToLong
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -23,8 +23,10 @@ data class CurrencyQuote(
     val usdPerUnit: Double,
     val eurPerUnit: Double,
     val isManual: Boolean,
-    /** true si el valor viene de una cotización externa vigente (BCV). */
+    /** true si el valor viene de una cotización externa vigente. */
     val isLive: Boolean = false,
+    /** Etiqueta de la fuente en vivo (BCV, Paralelo, BCE/Frankfurter...). */
+    val liveSource: String? = null,
     val liveUpdatedAtMillis: Long? = null,
 )
 
@@ -42,11 +44,14 @@ class CurrencyRates @Inject constructor(
 
     fun unitsPerUsd(code: String): Double {
         val normalized = code.trim().uppercase()
-        // Prioridad: tasa manual del usuario > cotización externa vigente > referencia offline.
-        settings.manualUnitsPerUsd.value[normalized]?.let { return it }
+        // Prioridad: tasa manual del usuario > referencia en vivo > tabla offline.
         if (normalized == VES) {
-            settings.liveRate.value?.takeIf { it.isFresh }?.let { return it.unitsPerUsd }
+            settings.vesManualRates.value[settings.activeVesReference.value]?.let { return it }
+            settings.activeVesRate()?.let { return it.unitsPerUsd }
+            return CurrencyCatalog.unitsPerUsd(VES)
         }
+        settings.manualUnitsPerUsd.value[normalized]?.let { return it }
+        settings.liveRates.value[normalized]?.takeIf { it.isFresh }?.let { return it.unitsPerUsd }
         return CurrencyCatalog.unitsPerUsd(normalized)
     }
 
@@ -68,8 +73,7 @@ class CurrencyRates @Inject constructor(
     fun quote(code: String): CurrencyQuote {
         val info = CurrencyCatalog.find(code) ?: unknownCurrency(code)
         val manual = settings.isManual(info.code)
-        val live = settings.liveRate.value
-            ?.takeIf { it.isFresh && info.code == VES && !manual }
+        val live = settings.liveRateFor(info.code)?.takeIf { it.isFresh && !manual }
         return CurrencyQuote(
             code = info.code,
             name = info.name,
@@ -81,17 +85,15 @@ class CurrencyRates @Inject constructor(
             eurPerUnit = eurPerUnit(info.code),
             isManual = manual,
             isLive = live != null,
+            liveSource = live?.source,
             liveUpdatedAtMillis = live?.fetchedAtMillis,
         )
     }
 
     fun quotes(): List<CurrencyQuote> = CurrencyCatalog.all.map { quote(it.code) }
 
-    /** Se recalcula cuando el usuario fija una tasa manual o llega la cotización BCV. */
-    fun quotesFlow(): Flow<List<CurrencyQuote>> = combine(
-        settings.manualUnitsPerUsd,
-        settings.liveRate,
-    ) { _, _ -> quotes() }
+    /** Se recalcula cuando cambia cualquier tasa manual o referencia en vivo. */
+    fun quotesFlow(): Flow<List<CurrencyQuote>> = settings.ratesRevision.map { quotes() }
 
     private fun unknownCurrency(code: String): CurrencyInfo = CurrencyInfo(
         code = code.trim().uppercase(),
