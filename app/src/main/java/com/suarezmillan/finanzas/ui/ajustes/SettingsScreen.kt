@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.suarezmillan.finanzas.core.branding.Branding
 import com.suarezmillan.finanzas.core.money.MoneyFormat
 import com.suarezmillan.finanzas.core.settings.ThemeMode
 import com.suarezmillan.finanzas.core.settings.ThemePreset
@@ -146,9 +147,17 @@ fun SettingsScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline)
                 SettingRow(
                     label = "Tasa",
-                    value = "1 ${state.secondaryCurrency} = " +
-                        "${MoneyFormat.formatRate(state.rate)} ${state.baseCurrency}",
-                    badge = if (state.rateIsManual) "manual" else "auto",
+                    value = if (state.rate > 0.0) {
+                        "1 ${state.secondaryCurrency} = " +
+                            "${MoneyFormat.formatRate(state.rate)} ${state.baseCurrency}"
+                    } else {
+                        "Sin tasa: fija una manual"
+                    },
+                    badge = when {
+                        state.rate <= 0.0 -> "sin tasa"
+                        state.rateIsManual -> "manual"
+                        else -> "auto"
+                    },
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline)
                 SettingRow("Referencia VES", vesReferenceLabel)
@@ -156,7 +165,7 @@ fun SettingsScreen(
                     Text("Ver todas las divisas y sus equivalencias")
                 }
                 TextButton(onClick = onOpenRates, modifier = Modifier.padding(top = 2.dp)) {
-                    Text("Tasas de cambio: BCV, paralelo, USDT, EUR y ARS")
+                    Text("Tasas de cambio: BCV, paralelo, USDT, EUR, ARS y tabla global")
                 }
                 Text(
                     "La tasa se guarda por movimiento: cambiarla no reescribe el pasado.",
@@ -212,8 +221,9 @@ fun SettingsScreen(
                 }
                 Text(
                     "La app solo se conecta para traer referencias públicas de cambio " +
-                        "(BCV, paralelo, EUR y ARS). Movimientos, facturas y perfil nunca " +
-                        "salen del teléfono. El CSV se comparte solo cuando tú eliges el destino.",
+                        "(BCV, paralelo, EUR, ARS y tabla global). Movimientos, facturas y " +
+                        "perfil nunca salen del teléfono. El CSV se comparte solo cuando tú " +
+                        "eliges el destino.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
@@ -224,11 +234,24 @@ fun SettingsScreen(
         item {
             Section("Seguridad") {
                 SettingRow("Contraseña", "PBKDF2 local")
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-                SettingRow("Bloqueo biométrico", "pendiente")
                 Text(
                     "La contraseña se guarda con sal y 120.000 iteraciones; nunca en claro. " +
-                        "El desbloqueo con huella llega en el próximo sprint.",
+                        "El perfil y los movimientos se quedan en este teléfono.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        }
+
+        item {
+            Section("Acerca de") {
+                SettingRow("Creador", Branding.CREATOR)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                SettingRow("Versión", Branding.VERSION)
+                Text(
+                    "Finanzas es una app local, sin cuentas en la nube. " +
+                        "Hecha por ${Branding.CREATOR}.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
@@ -238,7 +261,7 @@ fun SettingsScreen(
 
         item {
             Text(
-                "Finanzas 0.4.0 - offline-first",
+                "${Branding.APP_NAME} ${Branding.VERSION} · ${Branding.CREDIT}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

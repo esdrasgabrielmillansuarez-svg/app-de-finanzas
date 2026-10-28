@@ -10,8 +10,8 @@ import javax.inject.Singleton
 /**
  * Una divisa ya resuelta contra USD y EUR, lista para pintar.
  *
- * - [usdPerUnit]: cuántos USD vale 1 unidad de esta divisa (`0.000952` para ARS).
- * - [eurPerUnit]: ídem en euros, derivado de la referencia EUR/USD.
+ * Los tres valores son `null` cuando no hay ninguna referencia real ni manual:
+ * la UI muestra "sin cotización" en vez de inventar un número.
  */
 data class CurrencyQuote(
     val code: String,
@@ -19,9 +19,9 @@ data class CurrencyQuote(
     val symbol: String,
     val region: Region,
     val countries: List<Country>,
-    val unitsPerUsd: Double,
-    val usdPerUnit: Double,
-    val eurPerUnit: Double,
+    val unitsPerUsd: Double?,
+    val usdPerUnit: Double?,
+    val eurPerUnit: Double?,
     val isManual: Boolean,
     /** true si el valor viene de una cotización externa vigente. */
     val isLive: Boolean = false,
@@ -36,39 +36,52 @@ data class CurrencyQuote(
  * Todo pasa por USD como pivote: `A → B = (unidades B por USD) / (unidades A por USD)`.
  * Así hay **una sola fuente de verdad** y no se acumulan tasas cruzadas
  * inconsistentes entre pantallas.
+ *
+ * Prioridad: manual del usuario > referencia en vivo/cacheada > sin dato.
+ * No hay tabla de tasas aproximadas: si no hay fuente, no se inventa.
  */
 @Singleton
 class CurrencyRates @Inject constructor(
     private val settings: AppSettings,
 ) {
 
-    fun unitsPerUsd(code: String): Double {
+    fun unitsPerUsd(code: String): Double? {
         val normalized = code.trim().uppercase()
-        // Prioridad: tasa manual del usuario > referencia en vivo > tabla offline.
+
+        // Para VES la tasa manual es por referencia (BCV, paralelo, USDT).
         if (normalized == VES) {
             settings.vesManualRates.value[settings.activeVesReference.value]?.let { return it }
-            settings.activeVesRate()?.let { return it.unitsPerUsd }
-            return CurrencyCatalog.unitsPerUsd(VES)
+            return settings.activeVesRate()?.unitsPerUsd
         }
+
         settings.manualUnitsPerUsd.value[normalized]?.let { return it }
-        settings.liveRates.value[normalized]?.takeIf { it.isFresh }?.let { return it.unitsPerUsd }
-        return CurrencyCatalog.unitsPerUsd(normalized)
+        if (normalized == USD || normalized == "USDT") return 1.0
+        return settings.liveRates.value[normalized]
+            ?.takeIf { it.isFresh }
+            ?.unitsPerUsd
     }
 
-    fun usdPerUnit(code: String): Double = 1.0 / unitsPerUsd(code)
+    fun usdPerUnit(code: String): Double? =
+        unitsPerUsd(code)?.takeIf { it > 0.0 }?.let { 1.0 / it }
 
-    fun eurPerUnit(code: String): Double = usdPerUnit(code) * unitsPerUsd(EUR)
+    fun eurPerUnit(code: String): Double? {
+        val usd = usdPerUnit(code) ?: return null
+        val eurUnits = unitsPerUsd(EUR) ?: return null
+        return usd * eurUnits
+    }
 
-    /** Cuántas unidades de [to] compran 1 unidad de [from]. */
-    fun rate(from: String, to: String): Double {
-        val fromUnits = unitsPerUsd(from)
-        val toUnits = unitsPerUsd(to)
-        if (fromUnits <= 0.0 || toUnits <= 0.0) return 1.0
+    /** Cuántas unidades de [to] compran 1 unidad de [from]; null si falta una tasa. */
+    fun rate(from: String, to: String): Double? {
+        if (from.trim().equals(to.trim(), ignoreCase = true)) return 1.0
+        val fromUnits = unitsPerUsd(from) ?: return null
+        val toUnits = unitsPerUsd(to) ?: return null
+        if (fromUnits <= 0.0 || toUnits <= 0.0) return null
         return toUnits / fromUnits
     }
 
-    fun convert(minor: Long, from: String, to: String): Long =
-        (minor * rate(from, to)).roundToLong()
+    /** Convierte solo si ambas divisas tienen tasa; si no, devuelve null. */
+    fun convert(minor: Long, from: String, to: String): Long? =
+        rate(from, to)?.let { (minor * it).roundToLong() }
 
     fun quote(code: String): CurrencyQuote {
         val info = CurrencyCatalog.find(code) ?: unknownCurrency(code)
@@ -100,7 +113,6 @@ class CurrencyRates @Inject constructor(
         name = code.trim().uppercase(),
         symbol = code.trim().uppercase(),
         region = Region.AMERICA,
-        unitsPerUsd = 1.0,
         countries = emptyList(),
     )
 

@@ -15,22 +15,24 @@ import kotlinx.coroutines.flow.combine
 /**
  * Preferencias de la app.
  *
- * La apariencia, los recordatorios y las tasas se persisten vía
- * [PreferenceStore] (lectura síncrona al arrancar). El resto del estado de
- * divisas sigue en memoria.
+ * La apariencia, los recordatorios, las divisas base/secundaria y las tasas se
+ * persisten vía [PreferenceStore] (lectura síncrona al arrancar).
  *
- * Prioridad de una tasa: manual del usuario > referencia en vivo > tabla
- * offline de [CurrencyCatalog].
+ * Prioridad de una tasa: manual del usuario > referencia en vivo. Si no hay
+ * dato, no se inventa: la UI muestra "sin cotización".
  */
 @Singleton
 class AppSettings @Inject constructor(
     private val store: PreferenceStore,
 ) {
 
-    private val _baseCurrency = MutableStateFlow("ARS")
+    private val _baseCurrency = MutableStateFlow(loadCurrency(KEY_BASE_CURRENCY, "VES"))
     val baseCurrency: StateFlow<String> = _baseCurrency.asStateFlow()
 
-    private val _secondaryCurrency = MutableStateFlow("USD")
+    private val _secondaryCurrency = MutableStateFlow(
+        loadCurrency(KEY_SECONDARY_CURRENCY, "USD").takeUnless { it == _baseCurrency.value }
+            ?: if (_baseCurrency.value == "USD") "EUR" else "USD",
+    )
     val secondaryCurrency: StateFlow<String> = _secondaryCurrency.asStateFlow()
 
     /**
@@ -54,7 +56,7 @@ class AppSettings @Inject constructor(
     private val _vesManualRates = MutableStateFlow(loadVesManualRates())
     val vesManualRates: StateFlow<Map<VesReference, Double>> = _vesManualRates.asStateFlow()
 
-    /** Cotizaciones en vivo de otras divisas (hoy EUR y ARS): código → tasa. */
+    /** Cotizaciones en vivo del catálogo (EUR, ARS, tabla global...): código → tasa. */
     private val _liveRates = MutableStateFlow(loadLiveRates())
     val liveRates: StateFlow<Map<String, LiveRate>> = _liveRates.asStateFlow()
 
@@ -92,6 +94,7 @@ class AppSettings @Inject constructor(
         if (CurrencyCatalog.find(normalized) == null) return
         if (normalized == _secondaryCurrency.value) return
         _baseCurrency.value = normalized
+        store.putString(KEY_BASE_CURRENCY, normalized)
     }
 
     fun setSecondaryCurrency(code: String) {
@@ -99,6 +102,7 @@ class AppSettings @Inject constructor(
         if (CurrencyCatalog.find(normalized) == null) return
         if (normalized == _baseCurrency.value) return
         _secondaryCurrency.value = normalized
+        store.putString(KEY_SECONDARY_CURRENCY, normalized)
     }
 
     /** Fija la cotización manual de [code]: cuántas unidades equivalen a 1 USD. */
@@ -272,6 +276,11 @@ class AppSettings @Inject constructor(
         }
     }
 
+    private fun loadCurrency(key: String, fallback: String): String {
+        val saved = store.getString(key)?.trim()?.uppercase()
+        return saved?.takeIf { CurrencyCatalog.find(it) != null } ?: fallback
+    }
+
     private fun readRate(
         valueKey: String,
         atKey: String,
@@ -302,12 +311,16 @@ class AppSettings @Inject constructor(
 
     private companion object {
         const val VES_CODE = "VES"
-        val LIVE_CURRENCY_CODES = listOf("EUR", "ARS")
+        val LIVE_CURRENCY_CODES = CurrencyCatalog.all
+            .map { it.code }
+            .filter { it != VES_CODE && it != "USD" }
 
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_THEME_PRESET = "theme_preset"
         const val KEY_REMINDERS = "reminders_enabled"
         const val KEY_ACTIVE_VES_REF = "active_ves_reference"
+        const val KEY_BASE_CURRENCY = "base_currency"
+        const val KEY_SECONDARY_CURRENCY = "secondary_currency"
 
         // Claves de la versión 0.3.0: solo había BCV.
         const val KEY_LEGACY_VES_VALUE = "live_ves_units_per_usd"

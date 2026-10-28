@@ -4,6 +4,46 @@ import com.suarezmillan.finanzas.core.currency.LiveRate
 import org.json.JSONObject
 
 /**
+ * Tabla global de respaldo: ExchangeRate-API publica todas sus divisas en una
+ * sola respuesta. Solo se usan los códigos que existen en el catálogo de la app
+ * y se descartan valores vacíos o no finitos.
+ *
+ * ```json
+ * { "result":"success", "base_code":"USD", "rates": { "EUR":0.897453, "ARS":1538.741 } }
+ * ```
+ */
+object BulkRateParser {
+
+    fun parse(
+        json: String,
+        codes: Set<String>,
+        fetchedAtMillis: Long = System.currentTimeMillis(),
+    ): Map<String, LiveRate> {
+        val obj = runCatching { JSONObject(json) }.getOrNull() ?: return emptyMap()
+        if (obj.optString("result").equals("error", ignoreCase = true)) return emptyMap()
+        val rates = obj.optJSONObject("rates") ?: return emptyMap()
+
+        return buildMap {
+            codes.forEach { code ->
+                val normalized = code.trim().uppercase()
+                if (normalized == "VES" || normalized == "USD" || normalized == "USDT") return@forEach
+                val value = rates.optDouble(normalized, Double.NaN)
+                if (value > 0.0 && value.isFinite()) {
+                    put(
+                        normalized,
+                        LiveRate(
+                            unitsPerUsd = value,
+                            fetchedAtMillis = fetchedAtMillis,
+                            source = "ExchangeRate-API",
+                        ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
  * Euro global: Frankfurter publica el tipo del BCE.
  *
  * ```json

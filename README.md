@@ -1,9 +1,11 @@
-# Finanzas — MVP Android (offline-first)
+# Finanzas — Android (offline-first)
+
+> **Creado por Esdras Millan.**
 
 App de finanzas personales **bimoneda** para Android, con entrada en menos de 3
-segundos y **offline-first**: todo funciona sin red y solo se usa `INTERNET`
-para traer referencias públicas de cambio (BCV, paralelo, USDT, EUR y ARS).
-Kotlin + Compose + Room + Hilt.
+segundos y **offline-first**: registrar, consultar y presupuestar funciona sin
+red. `INTERNET` se usa solo para traer referencias públicas de cambio (BCV,
+paralelo, USDT, EUR, ARS y una tabla global). Kotlin + Compose + Room + Hilt.
 
 - Dirección de diseño: [`docs/diseno/direccion-de-diseno.md`](docs/diseno/direccion-de-diseno.md)
 - Prototipo navegable (HTML): [`prototipo/prototipo.html`](prototipo/prototipo.html)
@@ -33,6 +35,9 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
 - La sesión se recuerda entre arranques; **Cerrar sesión** está en Ajustes.
 - Todo es local: no hay servidor, recuperación por correo ni sincronización.
   Si se olvida la contraseña se pierde el acceso al perfil (documentado en la UI).
+- **Sin datos de ejemplo**: la app no precarga cuentas, movimientos ni
+  categorías. La primera cuenta de una divisa se crea cuando guardas un
+  movimiento en esa divisa; las categorías las creas tú desde Registrar o Plan.
 
 ## Qué funciona hoy
 
@@ -46,8 +51,8 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
 **Registrar (FAB)**
 - Tipo, divisa, categoría, importe con aritmética inline (`12+450`, `1200/2`).
 - **Escanear factura**: foto/galería → OCR en el dispositivo (ML Kit, modelo
-  empaquetado) → precarga importe, comercio, categoría y divisa, con aviso de
-  confianza.
+  empaquetado) → precarga importe, comercio, divisa y, si ya creaste una
+  categoría compatible, la categoría; con aviso de confianza.
 - Guardado con **Deshacer** en el snackbar.
 
 **Movimientos**
@@ -75,7 +80,8 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
   argentino; la manual siempre gana y se puede quitar.
 - **Exportar movimientos (CSV)** por el selector del sistema (FileProvider).
 - **Borrar todos los movimientos** con confirmación.
-- Estado honesto de seguridad: contraseña PBKDF2; biometría pendiente.
+- **Acerca de**: creador y versión visibles.
+- Seguridad local: contraseña PBKDF2; sin bloqueo biométrico.
 
 **Voz de la app**
 - Mensajes contextuales y deterministas (sin nube): prioridad vencido → vence
@@ -93,12 +99,13 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
 - **Referencias en vivo** del bolívar (VES): BCV oficial, dólar paralelo y USDT
   (estimado con el paralelo). Se actualizan al abrir la app y con el botón
   *Actualizar*, se guardan en caché 6 h y muestran cuándo se obtuvieron.
-- **Euro** (tipo del BCE vía Frankfurter) y **peso argentino oficial** (dolarapi)
-  también en vivo, con la misma caché honesta.
-- Elegir base y secundaria; fijar tasa manual por referencia (siempre gana sobre
-  la de internet) o volver a la de referencia.
-- Si falla la red, se conserva la última cotización; si nunca hubo, se usa la
-  tabla offline y se dice claramente.
+- **Euro** (tipo del BCE vía Frankfurter), **peso argentino oficial** (dolarapi)
+  y **tabla global** (ExchangeRate-API) para el resto del catálogo.
+- Elegir base y secundaria; fijar tasa manual por divisa o referencia (siempre
+  gana sobre la de internet) o volver a la de referencia.
+- Si falla la red, se conserva la última cotización. Si una divisa nunca tuvo
+  dato, se muestra **sin cotización** y se puede fijar a mano: no hay una tabla
+  de valores aproximados ni información inventada.
 
 ## Estructura
 
@@ -118,14 +125,14 @@ app/src/main/java/com/suarezmillan/finanzas/
 │   └── settings/               # AppSettings + PreferenceStore (JVM testeable)
 ├── data/
 │   ├── local/
-│   │   ├── FinanzasDatabase.kt # v2
-│   │   ├── Migrations.kt       # 1 → 2 (tabla users)
+│   │   ├── FinanzasDatabase.kt # v3
+│   │   ├── Migrations.kt       # 1 → 2 (users), 2 → 3 (limpia datos de ejemplo)
 │   │   ├── Converters.kt
 │   │   ├── entity/             # Account, Category, Txn, Envelope, ScheduledPayment, Debt, User
 │   │   ├── dao/                # un DAO por agregado
 │   │   └── model/EnvelopeProgress.kt
-│   └── repo/                   # Txn, Budget, Category, ScheduledPayment, Auth
-├── di/                         # Hilt: base de datos, semilla, bindings
+│   └── repo/                   # Txn, Account, Budget, Category, ScheduledPayment, Auth
+├── di/                         # Hilt: base de datos y bindings
 └── ui/
     ├── RootGate.kt             # splash / login / app
     ├── auth/                   # AuthViewModel + AuthScreen
@@ -156,6 +163,8 @@ app/src/main/java/com/suarezmillan/finanzas/
 | El tema cambia **acento y superficies**, nunca el significado | USD sigue ámbar y la moneda local sigue cian: el color no deja de informar. |
 | Mensajes del coach deterministas y contextuales | Sin nube, sin IA impredecible y testeables; prioridad explícita por reglas. |
 | Recordatorios con WorkManager, no `AlarmManager` | No hace falta precisión al minuto ni permisos de alarmas exactas. |
+| Sin cuentas, categorías ni tasas de ejemplo | La app muestra solo datos del usuario o referencias reales; si falta una tasa, dice "sin cotización". |
+| Cuenta creada al primer movimiento de cada divisa | Se evita pedir una configuración inicial y nunca se inventa un saldo o una cuenta. |
 
 ## Tests
 
@@ -165,33 +174,36 @@ app/src/main/java/com/suarezmillan/finanzas/
 
 - `AmountParserTest` — aritmética inline y decimales.
 - `CurrencyRatesTest` — paridad vía USD, referencias BCV/paralelo/USDT, EUR/ARS
-  en vivo y formato de tasas.
+  en vivo, ausencia de tasas inventadas y formato de tasas.
 - `ReceiptParserTest` — extracción de importe/comercio/categoría en tickets.
 - `PasswordHasherTest` — hash/verificación, sal distinta, no reversible.
 - `AuthValidationTest` — nombre, correo normalizado, contraseña mínima.
 - `CsvExporterTest` — cabecera, decimales y escapado RFC 4180.
 - `CoachEngineTest` — prioridad de vencimientos, sobres, hitos y rotación de variantes.
 - `BcvRateParserTest` — parser del BCV/paralelo, rechazo de fuente no esperada y caché de 6 h.
-- `MarketRateParsersTest` — euro de Frankfurter y ARS oficial (venta/compra).
-- `LiveRateSettingsTest` — referencias, elección y overrides sobreviven al reinicio.
+- `MarketRateParsersTest` — euro de Frankfurter, ARS oficial y tabla global.
+- `LiveRateSettingsTest` — referencias, elección, base/secundaria y overrides
+  sobreviven al reinicio.
 
-**60 tests, 0 fallos** en `:app:testDebugUnitTest`.
+**63 tests, 0 fallos** en `:app:testDebugUnitTest`.
 
 ## Qué falta (a propósito)
 
 - Otras cotizaciones (MEP/CCL) y actualización en segundo plano de la tasa.
 - Edición de movimientos ya guardados (hoy: duplicar/eliminar).
-- CRUD de cuentas; el registro usa `acc-cash` / `acc-usd` fijos.
+- CRUD de cuentas y renombrar la cuenta automática de cada divisa.
 - Deudas: entidad y DAO listos, **sin UI**.
-- SQLCipher (bloque comentado en `DatabaseModule`) + clave en Android Keystore.
-- Bloqueo biométrico (`androidx.biometric` ya está en dependencias).
-- DataStore para divisas/tasas y sesión (apariencia y recordatorios ya persisten
-  en SharedPreferences).
+- SQLCipher + clave en Android Keystore (no incluido).
+- Bloqueo biométrico (no incluido; `androidx.biometric` está en dependencias).
+- DataStore para la sesión (apariencia, recordatorios, divisas y tasas ya
+  persisten en SharedPreferences).
 - Edición de los textos del coach desde la UI (hoy son constantes testeables).
 - Widget Glance + deep link `finanzas://registrar` (el manifiesto ya lo declara).
 - Backup propio cifrado (Auto Backup está **desactivado** para la base).
 
 ## Versiones
+
+Versión de la app: **0.5.0** (`versionCode 4`).
 
 Fijadas a un set conservador y mutuamente compatible: Kotlin 2.0.21, AGP 8.7.3,
 Gradle 8.9, Compose BOM 2024.10.01, Room 2.6.1, Hilt 2.52, KSP 2.0.21-1.0.28,

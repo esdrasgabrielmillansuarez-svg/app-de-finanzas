@@ -212,6 +212,16 @@ fun HomeScreen(
             Text("Últimos movimientos", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
+        if (state.recent.isEmpty()) {
+            item {
+                Text(
+                    "Aún no hay movimientos. Toca + para registrar el primero.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
         items(state.recent, key = { it.id }) { txn ->
             TxnRow(txn = txn, onClick = { onTxnClick(txn) })
         }

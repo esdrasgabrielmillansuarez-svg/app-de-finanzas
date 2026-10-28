@@ -8,8 +8,8 @@ import java.io.File
 /**
  * Comparte el CSV por el selector del sistema.
  *
- * Se escribe en `cacheDir/exports` y se expone con FileProvider: la app sigue
- * sin permiso de INTERNET, y el usuario decide a dónde va el archivo.
+ * Se escribe en `cacheDir/exports` y se expone con FileProvider: no sube nada a
+ * ningún servidor y el usuario decide a dónde va el archivo.
  */
 fun shareCsv(context: Context, csv: String, fileName: String) {
     val dir = File(context.cacheDir, "exports").apply { mkdirs() }

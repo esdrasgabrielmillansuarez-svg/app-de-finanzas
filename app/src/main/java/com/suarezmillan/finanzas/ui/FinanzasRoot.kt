@@ -299,6 +299,7 @@ fun FinanzasRoot(
                     state = state,
                     payments = payments,
                     onSetLimit = { categoryId, limit -> vm.setEnvelopeLimit(categoryId, limit) },
+                    onCreateCategory = { name, emoji, kind -> vm.createCategory(name, emoji, kind) },
                     onAddPayment = { name, amount, dueAt, recurrence, categoryId ->
                         vm.addScheduledPayment(name, amount, dueAt, recurrence, categoryId)
                     },
@@ -357,6 +358,7 @@ fun FinanzasRoot(
                 receipt = receipt,
                 onScan = { vm.analyzeReceipt(it) },
                 onClearReceipt = { vm.clearReceipt() },
+                onCreateCategory = { name, emoji, kind -> vm.createCategory(name, emoji, kind) },
                 onSave = { type, amountMinor, currency, categoryId, merchant ->
                     vm.saveQuickEntry(type, amountMinor, currency, categoryId, merchant)
                     quickOpen = false

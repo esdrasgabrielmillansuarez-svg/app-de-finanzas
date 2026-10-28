@@ -50,6 +50,7 @@ import com.suarezmillan.finanzas.data.local.entity.CategoryKind
 import com.suarezmillan.finanzas.data.local.entity.TxnType
 import com.suarezmillan.finanzas.ui.HomeUiState
 import com.suarezmillan.finanzas.ui.ReceiptUiState
+import com.suarezmillan.finanzas.ui.components.CategoryDialog
 
 /**
  * Hoja de registro rápido: tipo, divisa, importe, categoría y factura, en una
@@ -61,6 +62,7 @@ fun QuickEntrySheet(
     receipt: ReceiptUiState,
     onScan: (Uri) -> Unit,
     onClearReceipt: () -> Unit,
+    onCreateCategory: (name: String, emoji: String, kind: CategoryKind) -> Unit,
     onSave: (TxnType, Long, String, String, String?) -> Unit,
 ) {
     var type by rememberSaveable { mutableStateOf(TxnType.EXPENSE) }
@@ -68,13 +70,24 @@ fun QuickEntrySheet(
     var expression by rememberSaveable { mutableStateOf("") }
     var merchant by rememberSaveable { mutableStateOf("") }
     var categoryId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showCategoryDialog by rememberSaveable { mutableStateOf(false) }
+    var pendingCategoryName by rememberSaveable { mutableStateOf<String?>(null) }
 
     val categories = remember(state.categories, type) {
         val wanted = if (type == TxnType.EXPENSE) CategoryKind.EXPENSE else CategoryKind.INCOME
         state.categories.filter { it.kind == wanted }
     }
 
-    LaunchedEffect(categories) {
+    LaunchedEffect(categories, pendingCategoryName) {
+        val pending = pendingCategoryName
+        if (pending != null) {
+            val created = categories.firstOrNull { it.name.equals(pending, ignoreCase = true) }
+            if (created != null) {
+                categoryId = created.id
+                pendingCategoryName = null
+                return@LaunchedEffect
+            }
+        }
         if (categories.none { it.id == categoryId }) {
             categoryId = categories.firstOrNull()?.id
         }
@@ -92,8 +105,9 @@ fun QuickEntrySheet(
             ?.takeIf { it == state.baseCurrency || it == state.secondaryCurrency }
             ?.let { currency = it }
         analysis.categoryHint?.let { hint ->
-            val suggested = hint.seedCategoryId()
-            if (state.categories.any { it.id == suggested }) categoryId = suggested
+            state.categories
+                .firstOrNull { it.kind == CategoryKind.EXPENSE && hint.matches(it.name) }
+                ?.let { categoryId = it.id }
         }
     }
 
@@ -173,7 +187,11 @@ fun QuickEntrySheet(
             Spacer(Modifier.weight(1f))
             if (currency != state.baseCurrency) {
                 Text(
-                    text = "1 ${state.secondaryCurrency} = ${"%.2f".format(state.rate)} ${state.baseCurrency}",
+                    text = if (state.rate > 0.0) {
+                        "1 ${state.secondaryCurrency} = ${MoneyFormat.formatRate(state.rate)} ${state.baseCurrency}"
+                    } else {
+                        "Sin tasa: fíjala en Ajustes"
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -209,6 +227,22 @@ fun QuickEntrySheet(
                     label = { Text("${category.emoji} ${category.name}") },
                 )
             }
+            item {
+                FilterChip(
+                    selected = false,
+                    onClick = { showCategoryDialog = true },
+                    label = { Text("+ Categoría") },
+                )
+            }
+        }
+
+        if (categories.isEmpty()) {
+            Text(
+                text = "Aún no tienes categorías. Crea la primera para guardar.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
         }
 
         Spacer(Modifier.height(12.dp))
@@ -248,6 +282,19 @@ fun QuickEntrySheet(
         ) {
             Text("Guardar", style = MaterialTheme.typography.titleMedium)
         }
+    }
+
+    if (showCategoryDialog) {
+        val kind = if (type == TxnType.EXPENSE) CategoryKind.EXPENSE else CategoryKind.INCOME
+        CategoryDialog(
+            kind = kind,
+            onDismiss = { showCategoryDialog = false },
+            onConfirm = { name, emoji ->
+                pendingCategoryName = name
+                showCategoryDialog = false
+                onCreateCategory(name, emoji, kind)
+            },
+        )
     }
 }
 
@@ -393,13 +440,19 @@ private fun minorToExpression(minor: Long): String {
     return if (cents == 0) major.toString() else "%d,%02d".format(major, cents)
 }
 
-/** Traduce la pista del OCR a las categorías sembradas en la base. */
-private fun CategoryHint.seedCategoryId(): String = when (this) {
-    CategoryHint.SUPER -> "cat-super"
-    CategoryHint.FOOD -> "cat-food"
-    CategoryHint.TRANSPORT -> "cat-transp"
-    CategoryHint.HOME -> "cat-home"
-    CategoryHint.FUN -> "cat-fun"
-    CategoryHint.HEALTH -> "cat-health"
-    CategoryHint.BILLS -> "cat-bills"
+/**
+ * El OCR solo sugiere una categoría si el usuario ya creó una cuyo nombre
+ * encaja. No hay categorías de ejemplo ni IDs fijos.
+ */
+private fun CategoryHint.matches(categoryName: String): Boolean {
+    val keywords = when (this) {
+        CategoryHint.SUPER -> listOf("super", "mercado", "compras")
+        CategoryHint.FOOD -> listOf("comida", "restaurante", "café", "cafe", "food")
+        CategoryHint.TRANSPORT -> listOf("transporte", "gasolina", "auto", "taxi", "metro")
+        CategoryHint.HOME -> listOf("casa", "hogar", "alquiler", "renta")
+        CategoryHint.FUN -> listOf("ocio", "diversión", "diversion", "cine", "salida")
+        CategoryHint.HEALTH -> listOf("salud", "farmacia", "médico", "medico")
+        CategoryHint.BILLS -> listOf("servicio", "luz", "agua", "internet", "factura")
+    }
+    return keywords.any { categoryName.contains(it, ignoreCase = true) }
 }

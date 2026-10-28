@@ -113,6 +113,19 @@ class LiveRateSettingsTest {
     }
 
     @Test
+    fun `la base y la secundaria sobreviven al reinicio`() {
+        val store = InMemoryPreferenceStore()
+        val first = AppSettings(store)
+        first.setBaseCurrency("EUR")
+        first.setSecondaryCurrency("USD")
+
+        val second = AppSettings(store)
+
+        assertEquals("EUR", second.baseCurrency.value)
+        assertEquals("USD", second.secondaryCurrency.value)
+    }
+
+    @Test
     fun `migra la cotizacion BCV de la version anterior`() {
         val store = InMemoryPreferenceStore()
         store.putDouble("live_ves_units_per_usd", 888.0)

@@ -2,6 +2,7 @@ package com.suarezmillan.finanzas.core.currency.remote
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MarketRateParsersTest {
@@ -53,5 +54,43 @@ class MarketRateParsersTest {
         assertNull(ArsRateParser.parse("no es json"))
         assertNull(EurRateParser.parse("""{"rates":{}}"""))
         assertNull(EurRateParser.parse("""{"rates":{"EUR":0}}"""))
+    }
+
+    @Test
+    fun `la tabla global solo devuelve divisas conocidas y validas`() {
+        val json = """
+            {
+              "result": "success",
+              "base_code": "USD",
+              "rates": {
+                "EUR": 0.897453,
+                "ARS": 1538.741,
+                "BOB": 11.855191,
+                "VES": 888.0,
+                "USD": 1.0,
+                "USDT": 1.0,
+                "JPY": 0
+              }
+            }
+        """.trimIndent()
+
+        val rates = BulkRateParser.parse(
+            json,
+            codes = setOf("EUR", "ARS", "BOB", "VES", "USD", "USDT", "JPY", "XYZ"),
+            fetchedAtMillis = 9L,
+        )
+
+        assertEquals(setOf("EUR", "ARS", "BOB"), rates.keys)
+        assertEquals(0.897453, rates.getValue("EUR").unitsPerUsd, 1e-9)
+        assertEquals(1_538.741, rates.getValue("ARS").unitsPerUsd, 1e-9)
+        assertEquals(9L, rates.getValue("EUR").fetchedAtMillis)
+        assertEquals("ExchangeRate-API", rates.getValue("BOB").source)
+    }
+
+    @Test
+    fun `la tabla global rechaza respuestas invalidas`() {
+        assertTrue(BulkRateParser.parse("no es json", setOf("EUR")).isEmpty())
+        assertTrue(BulkRateParser.parse("""{"result":"error"}""", setOf("EUR")).isEmpty())
+        assertTrue(BulkRateParser.parse("""{"result":"success","rates":{}}""", setOf("EUR")).isEmpty())
     }
 }

@@ -57,6 +57,7 @@ import com.suarezmillan.finanzas.data.local.entity.Recurrence
 import com.suarezmillan.finanzas.data.local.entity.ScheduledPaymentEntity
 import com.suarezmillan.finanzas.data.local.model.EnvelopeProgress
 import com.suarezmillan.finanzas.ui.HomeUiState
+import com.suarezmillan.finanzas.ui.components.CategoryDialog
 import com.suarezmillan.finanzas.ui.components.MoneyText
 import com.suarezmillan.finanzas.ui.quick.AmountParser
 import com.suarezmillan.finanzas.ui.theme.Alerta
@@ -73,6 +74,7 @@ fun PlanScreen(
     state: HomeUiState,
     payments: List<ScheduledPaymentEntity>,
     onSetLimit: (categoryId: String, limitMinor: Long) -> Unit,
+    onCreateCategory: (name: String, emoji: String, kind: CategoryKind) -> Unit,
     onAddPayment: (String, Long, Long, Recurrence, String?) -> Unit,
     onPay: (ScheduledPaymentEntity) -> Unit,
     onDeletePayment: (ScheduledPaymentEntity) -> Unit,
@@ -87,7 +89,11 @@ fun PlanScreen(
 
         Box(Modifier.fillMaxSize()) {
             when (tab) {
-                0 -> EnvelopesTab(state = state, onSetLimit = onSetLimit)
+                0 -> EnvelopesTab(
+                    state = state,
+                    onSetLimit = onSetLimit,
+                    onCreateCategory = onCreateCategory,
+                )
                 else -> PaymentsTab(
                     state = state,
                     payments = payments,
@@ -106,10 +112,12 @@ fun PlanScreen(
 private fun EnvelopesTab(
     state: HomeUiState,
     onSetLimit: (String, Long) -> Unit,
+    onCreateCategory: (String, String, CategoryKind) -> Unit,
 ) {
     val byCategory = remember(state.envelopes) { state.envelopes.associateBy { it.categoryId } }
     val categories = state.categories.filter { it.kind == CategoryKind.EXPENSE }
     var editing by remember { mutableStateOf<CategoryEntity?>(null) }
+    var showCategoryDialog by rememberSaveable { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -120,10 +128,26 @@ private fun EnvelopesTab(
             SummaryCard(state)
         }
 
+        item {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    "Categorías",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { showCategoryDialog = true }) {
+                    Text("+ Nueva")
+                }
+            }
+        }
+
         if (categories.isEmpty()) {
             item {
                 Text(
-                    "No hay categorías de gasto.",
+                    "No hay categorías de gasto. Crea una para asignarle un sobre.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -158,6 +182,17 @@ private fun EnvelopesTab(
                 editing = null
             },
             onDismiss = { editing = null },
+        )
+    }
+
+    if (showCategoryDialog) {
+        CategoryDialog(
+            kind = CategoryKind.EXPENSE,
+            onDismiss = { showCategoryDialog = false },
+            onConfirm = { name, emoji ->
+                showCategoryDialog = false
+                onCreateCategory(name, emoji, CategoryKind.EXPENSE)
+            },
         )
     }
 }

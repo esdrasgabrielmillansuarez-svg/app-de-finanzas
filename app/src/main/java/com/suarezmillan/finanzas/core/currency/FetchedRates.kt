@@ -8,7 +8,7 @@ package com.suarezmillan.finanzas.core.currency
  */
 data class FetchedRates(
     val ves: Map<VesReference, LiveRate> = emptyMap(),
-    /** Otras divisas: hoy EUR y ARS. */
+    /** Otras divisas: EUR, ARS y la tabla global del catálogo. */
     val currencies: Map<String, LiveRate> = emptyMap(),
 ) {
     val isEmpty: Boolean

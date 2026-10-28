@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.suarezmillan.finanzas.core.branding.Branding
 import com.suarezmillan.finanzas.data.repo.AuthSession
 import com.suarezmillan.finanzas.ui.auth.AuthScreen
 import com.suarezmillan.finanzas.ui.auth.AuthViewModel
@@ -57,11 +58,16 @@ private fun Splash() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("Finanzas", style = MaterialTheme.typography.headlineMedium)
+        Text(Branding.APP_NAME, style = MaterialTheme.typography.headlineMedium)
         Text(
             "tus cuentas, sin nube",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            Branding.CREDIT,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
         )
         androidx.compose.foundation.layout.Spacer(Modifier.height(20.dp))
         CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)

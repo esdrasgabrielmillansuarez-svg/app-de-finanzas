@@ -56,9 +56,10 @@ import com.suarezmillan.finanzas.ui.components.timeAgo
  * Catálogo completo de divisas, agrupado por región y con los países que usan
  * cada una. Cada fila muestra cuánto vale **1 unidad en USD y en EUR**.
  *
- * Referencias en vivo: BCV, paralelo y USDT para el bolívar; euro del BCE y
- * peso argentino oficial. El resto es tabla offline. Una tasa manual siempre
- * gana; la del bolívar se guarda por referencia.
+ * Referencias reales: BCV, paralelo y USDT para el bolívar; euro del BCE, peso
+ * argentino oficial y una tabla global para el resto. Si una divisa no tiene
+ * cotización, se dice explícitamente y se puede fijar una tasa manual. No hay
+ * valores aproximados inventados.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -133,9 +134,9 @@ fun CurrenciesScreen(
 
             item {
                 Text(
-                    text = "Referencias en vivo: BCV, paralelo, USDT, EUR y ARS · " +
-                        "el resto es tabla offline (${quotes.size} divisas). " +
-                        "Fija una tasa manual si tu país cotiza distinto.",
+                    text = "Referencias reales: BCV, paralelo, USDT, EUR, ARS y tabla global " +
+                        "(${quotes.size} divisas). Si una divisa no tiene cotización, " +
+                        "se muestra sin tasa y puedes fijarla a mano.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 8.dp),
@@ -354,6 +355,9 @@ private fun CurrencyRow(
                     if (isSecondary) Badge("2ª")
                     if (quote.isManual) Badge("manual")
                     if (quote.isLive) Badge(liveBadge)
+                    if (!quote.isManual && !quote.isLive && quote.unitsPerUsd == null) {
+                        Badge("sin tasa")
+                    }
                 }
                 Text(
                     text = countries.ifEmpty { quote.name },
@@ -368,16 +372,26 @@ private fun CurrencyRow(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text(
-                    text = "${MoneyFormat.formatRate(quote.usdPerUnit)} USD",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = "${MoneyFormat.formatRate(quote.eurPerUnit)} EUR",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                val usd = quote.usdPerUnit
+                val eur = quote.eurPerUnit
+                if (usd == null && eur == null) {
+                    Text(
+                        text = "sin cotización",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Text(
+                        text = "${MoneyFormat.formatRate(usd ?: 0.0)} USD",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = "${MoneyFormat.formatRate(eur ?: 0.0)} EUR",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
@@ -427,9 +441,17 @@ private fun CurrencyDetailDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(14.dp))
-                RateLine("1 ${quote.code}", "${MoneyFormat.formatRate(quote.usdPerUnit)} USD")
-                RateLine("", "${MoneyFormat.formatRate(quote.eurPerUnit)} EUR")
-                RateLine("1 USD", "${MoneyFormat.formatRate(quote.unitsPerUsd)} ${quote.code}")
+                if (quote.unitsPerUsd == null) {
+                    Text(
+                        "Sin cotización disponible. Fija una tasa manual para esta divisa.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    RateLine("1 ${quote.code}", "${MoneyFormat.formatRate(quote.usdPerUnit ?: 0.0)} USD")
+                    RateLine("", "${MoneyFormat.formatRate(quote.eurPerUnit ?: 0.0)} EUR")
+                    RateLine("1 USD", "${MoneyFormat.formatRate(quote.unitsPerUsd ?: 0.0)} ${quote.code}")
+                }
                 if (quote.code == "USDT") {
                     RateLine("1 USDT", "≈ 1 USD (stablecoin)")
                 }

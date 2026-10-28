@@ -1,7 +1,8 @@
 package com.suarezmillan.finanzas.core.currency.remote
 
+import com.suarezmillan.finanzas.core.branding.Branding
+import com.suarezmillan.finanzas.core.currency.CurrencyCatalog
 import com.suarezmillan.finanzas.core.currency.FetchedRates
-import com.suarezmillan.finanzas.core.currency.LiveRate
 import com.suarezmillan.finanzas.core.currency.VesReference
 import java.net.HttpURLConnection
 import java.net.URL
@@ -18,6 +19,7 @@ import kotlinx.coroutines.withContext
  * - **BCV oficial** y **paralelo** desde el espejo `ve.dolarapi.com`.
  * - **Euro** desde Frankfurter (tipo del BCE).
  * - **ARS oficial** desde dolarapi Argentina.
+ * - **Tabla global** desde ExchangeRate-API para el resto del catálogo.
  *
  * USDT no tiene una cotización pública estable en VES: se estima con el
  * paralelo y el usuario puede fijar otra equivalencia a mano. La app no envía
@@ -35,11 +37,18 @@ class MarketRateSource @Inject constructor() : RateSource {
             }
             val eur = async { getJson(EUR_URL)?.let { EurRateParser.parse(it) } }
             val ars = async { getJson(ARS_URL)?.let { ArsRateParser.parse(it) } }
+            val bulk = async {
+                val fetchedAt = System.currentTimeMillis()
+                getJson(BULK_URL)?.let {
+                    BulkRateParser.parse(it, CurrencyCatalog.all.map { info -> info.code }.toSet(), fetchedAt)
+                } ?: emptyMap()
+            }
 
             val bcvRate = bcv.await()
             val paraleloRate = paralelo.await()
             val eurRate = eur.await()
             val arsRate = ars.await()
+            val bulkRates = bulk.await()
 
             FetchedRates(
                 ves = buildMap {
@@ -51,6 +60,8 @@ class MarketRateSource @Inject constructor() : RateSource {
                     }
                 },
                 currencies = buildMap {
+                    // Primero la tabla global; luego las fuentes más específicas.
+                    putAll(bulkRates)
                     eurRate?.let { put("EUR", it) }
                     arsRate?.let { put("ARS", it) }
                 },
@@ -66,7 +77,7 @@ class MarketRateSource @Inject constructor() : RateSource {
                 readTimeout = TIMEOUT_MS
                 instanceFollowRedirects = true
                 setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "Finanzas/1.0 (offline-first)")
+                setRequestProperty("User-Agent", "${Branding.APP_NAME}/${Branding.VERSION} (offline-first)")
             }
             try {
                 if (connection.responseCode !in 200..299) {
@@ -89,6 +100,7 @@ class MarketRateSource @Inject constructor() : RateSource {
         const val PARALELO_URL = "https://ve.dolarapi.com/v1/dolares/paralelo"
         const val EUR_URL = "https://api.frankfurter.app/latest?from=USD&to=EUR"
         const val ARS_URL = "https://dolarapi.com/v1/dolares/oficial"
+        const val BULK_URL = "https://open.er-api.com/v6/latest/USD"
         const val TIMEOUT_MS = 8_000
     }
 }

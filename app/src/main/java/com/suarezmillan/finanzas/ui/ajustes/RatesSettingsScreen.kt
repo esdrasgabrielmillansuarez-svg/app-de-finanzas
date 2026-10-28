@@ -45,7 +45,7 @@ import com.suarezmillan.finanzas.ui.components.timeAgo
  *
  * El usuario elige la referencia del bolívar (BCV, paralelo o USDT) y puede
  * fijar a mano la equivalencia de **cada** referencia y del euro / peso
- * argentino. Regla única: manual > en vivo > tabla offline.
+ * argentino. Regla única: manual > en vivo; si no hay dato, se indica.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -156,10 +156,10 @@ fun RatesSettingsScreen(
 
             item {
                 Text(
-                    "Prioridad: tu tasa manual > referencia en vivo > tabla offline. " +
-                        "Las referencias se cachean 6 h; si falla la red se mantiene la " +
-                        "última. Solo se hacen GET anónimos: movimientos y facturas " +
-                        "nunca salen del teléfono.",
+                    "Prioridad: tu tasa manual > referencia en vivo. Si no hay dato, la " +
+                        "app no inventa una tasa: puedes fijarla a mano. Las referencias " +
+                        "se cachean 6 h y, si falla la red, se mantiene la última. Solo se " +
+                        "hacen GET anónimos: movimientos y facturas nunca salen del teléfono.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
@@ -284,7 +284,7 @@ private fun VesReferenceRow(
                 text = if (value != null) {
                     "${reference.unitLabel} = ${MoneyFormat.formatRate(value)} VES"
                 } else {
-                    "Sin dato · se usa la tabla offline"
+                    "Sin dato · fija una tasa manual"
                 },
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(start = 4.dp, top = 2.dp),
@@ -368,7 +368,7 @@ private fun CurrencyRateRow(
                 text = if (value != null) {
                     "1 USD = ${MoneyFormat.formatRate(value)} $code"
                 } else {
-                    "Sin dato · se usa la tabla offline"
+                    "Sin dato · fija una tasa manual"
                 },
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(top = 4.dp),

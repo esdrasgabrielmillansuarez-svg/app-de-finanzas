@@ -28,3 +28,41 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_users_email` ON `users` (`email`)")
     }
 }
+
+/**
+ * v2 → v3: limpieza de los datos de ejemplo que sembraba la app al instalar.
+ *
+ * Solo se borran las cuentas y categorías de arranque que **no** tengan
+ * movimientos, sobres ni pagos asociados. Si el usuario ya las usó, esos datos
+ * son suyos y se conservan.
+ */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            DELETE FROM categories
+            WHERE id IN (
+                'cat-super', 'cat-food', 'cat-transp', 'cat-home', 'cat-fun',
+                'cat-health', 'cat-bills', 'cat-salary', 'cat-free'
+            )
+              AND NOT EXISTS (SELECT 1 FROM txns WHERE txns.categoryId = categories.id)
+              AND NOT EXISTS (SELECT 1 FROM envelopes WHERE envelopes.categoryId = categories.id)
+              AND NOT EXISTS (
+                  SELECT 1 FROM scheduled_payments
+                  WHERE scheduled_payments.categoryId = categories.id
+              )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            DELETE FROM accounts
+            WHERE id IN ('acc-cash', 'acc-usd')
+              AND NOT EXISTS (SELECT 1 FROM txns WHERE txns.accountId = accounts.id)
+              AND NOT EXISTS (
+                  SELECT 1 FROM scheduled_payments
+                  WHERE scheduled_payments.accountId = accounts.id
+              )
+            """.trimIndent(),
+        )
+    }
+}

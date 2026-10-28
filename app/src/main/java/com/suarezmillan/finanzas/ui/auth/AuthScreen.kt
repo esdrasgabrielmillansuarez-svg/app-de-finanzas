@@ -48,6 +48,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.suarezmillan.finanzas.core.auth.AuthValidation
+import com.suarezmillan.finanzas.core.branding.Branding
 
 /**
  * Entrada a la app: **Entrar** o **Crear cuenta**.
@@ -119,11 +120,16 @@ fun AuthScreen(
         }
 
         Spacer(Modifier.height(18.dp))
-        Text("Finanzas", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+        Text(Branding.APP_NAME, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
         Text(
             text = if (registerMode) "Crea tu perfil local" else "Bienvenido de nuevo",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = "por ${Branding.CREATOR}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
         )
 
         Spacer(Modifier.height(22.dp))
@@ -266,8 +272,9 @@ fun AuthScreen(
         Spacer(Modifier.height(24.dp))
 
         Text(
-            text = "Sin conexión, sin servidores y sin permiso de Internet: " +
-                "tu perfil y tus movimientos se quedan en este teléfono.",
+            text = "Sin cuentas en la nube: tu perfil y tus movimientos se quedan en este " +
+                "teléfono. Solo se usa Internet para referencias públicas de cambio. " +
+                Branding.CREDIT + ".",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Start,

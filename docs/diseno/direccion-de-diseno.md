@@ -187,10 +187,10 @@ La pantalla más importante del producto. Una sola sheet, sin pasos.
 │                                      │
 │  [● local]  [● USD]                  │  toggle divisa (punto de color)
 │  ─────────────────────────────────   │
-│  🛒 Súper   🍔 Comida   🚕 Transporte│  chips, predicha resaltada
-│  🏠 Casa    ＋                       │
+│  🛒 Tus categorías...   ＋ Categoría │  chips del usuario, sin datos de ejemplo
+│                                      │
 │  ─────────────────────────────────   │
-│  Efectivo · hoy                      │  cuenta + fecha, 1 toque para cambiar
+│  Cuenta VES · hoy                    │  se crea al primer movimiento
 │                                      │
 │  [        Guardar        ]           │  pill, 56 dp, ancho completo
 │  1    2    3    ⌫                     │

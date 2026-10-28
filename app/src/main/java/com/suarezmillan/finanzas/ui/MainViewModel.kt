@@ -17,12 +17,14 @@ import com.suarezmillan.finanzas.core.settings.AppSettings
 import com.suarezmillan.finanzas.core.settings.ThemeMode
 import com.suarezmillan.finanzas.core.settings.ThemePreset
 import com.suarezmillan.finanzas.data.local.entity.CategoryEntity
+import com.suarezmillan.finanzas.data.local.entity.CategoryKind
 import com.suarezmillan.finanzas.data.local.entity.PaymentStatus
 import com.suarezmillan.finanzas.data.local.entity.Recurrence
 import com.suarezmillan.finanzas.data.local.entity.ScheduledPaymentEntity
 import com.suarezmillan.finanzas.data.local.entity.TxnEntity
 import com.suarezmillan.finanzas.data.local.entity.TxnType
 import com.suarezmillan.finanzas.data.local.model.EnvelopeProgress
+import com.suarezmillan.finanzas.data.repo.AccountRepository
 import com.suarezmillan.finanzas.data.repo.BudgetRepository
 import com.suarezmillan.finanzas.data.repo.CategoryRepository
 import com.suarezmillan.finanzas.data.repo.MonthSummary
@@ -45,7 +47,7 @@ import java.time.ZoneId
 import javax.inject.Inject
 
 data class HomeUiState(
-    val baseCurrency: String = "ARS",
+    val baseCurrency: String = "VES",
     val secondaryCurrency: String = "USD",
     val rate: Double = 0.0,
     val rateIsManual: Boolean = false,
@@ -86,6 +88,7 @@ data class PaidPayment(
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val txnRepository: TxnRepository,
+    private val accountRepository: AccountRepository,
     private val budgetRepository: BudgetRepository,
     private val categoryRepository: CategoryRepository,
     private val paymentRepository: ScheduledPaymentRepository,
@@ -167,7 +170,7 @@ class MainViewModel @Inject constructor(
         CurrencyContext(
             base = base,
             secondary = secondary,
-            rate = rates.rate(secondary, base),
+            rate = rates.rate(secondary, base) ?: 0.0,
             manual = settings.isManual(base) || settings.isManual(secondary),
         )
     }
@@ -235,6 +238,19 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /** Crea una categoría propia; no se siembran categorías de ejemplo. */
+    fun createCategory(name: String, emoji: String, kind: CategoryKind) {
+        val cleanName = name.trim().take(28)
+        if (cleanName.isBlank()) return
+        val category = CategoryEntity(
+            name = cleanName,
+            emoji = emoji.ifBlank { "💸" },
+            kind = kind,
+            sortOrder = (state.value.categories.maxOfOrNull { it.sortOrder } ?: -1) + 1,
+        )
+        viewModelScope.launch { categoryRepository.add(category) }
+    }
+
     /** Inserta y publica el conteo exacto antes de avisar (para el mensaje de hito). */
     private suspend fun publishSaved(txn: TxnEntity) {
         txnRepository.add(txn)
@@ -292,31 +308,34 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch { txnRepository.deleteAll() }
     }
 
-    private fun buildTxn(
+    private suspend fun buildTxn(
         type: TxnType,
         amountMinor: Long,
         currency: String,
         categoryId: String?,
         merchant: String?,
+        accountId: String? = null,
     ): TxnEntity {
         val base = settings.baseCurrency.value
         val isBase = currency.equals(base, ignoreCase = true)
         val signed = if (type == TxnType.EXPENSE) -amountMinor else amountMinor
+        val account = accountId ?: accountRepository.ensure(currency).id
+        val fx = if (isBase) null else rates.rate(currency, base)
         return TxnEntity(
             type = type,
             amountMinor = signed,
             currency = currency,
-            accountId = if (isBase) ACCOUNT_CASH else ACCOUNT_USD,
+            accountId = account,
             categoryId = categoryId,
             merchant = merchant,
             occurredAt = System.currentTimeMillis(),
-            fxRateToBase = if (isBase) null else rates.rate(currency, base),
+            fxRateToBase = fx,
             fxSource = when {
-                isBase -> FxSource.NONE
+                isBase || fx == null -> FxSource.NONE
                 settings.isManual(currency) || settings.isManual(base) -> FxSource.MANUAL
                 else -> FxSource.AUTO
             },
-            fxTimestamp = if (isBase) null else System.currentTimeMillis(),
+            fxTimestamp = if (isBase || fx == null) null else System.currentTimeMillis(),
         )
     }
 
@@ -385,12 +404,13 @@ class MainViewModel @Inject constructor(
         if (name.isBlank() || amountMinor <= 0L) return
         viewModelScope.launch {
             val base = settings.baseCurrency.value
+            val account = accountRepository.ensure(base)
             paymentRepository.add(
                 ScheduledPaymentEntity(
                     name = name.trim(),
                     amountMinor = amountMinor,
                     currency = base,
-                    accountId = ACCOUNT_CASH,
+                    accountId = account.id,
                     categoryId = categoryId,
                     dueAt = dueAtMillis,
                     recurrence = recurrence,
@@ -408,6 +428,7 @@ class MainViewModel @Inject constructor(
                 currency = payment.currency,
                 categoryId = payment.categoryId,
                 merchant = payment.name,
+                accountId = payment.accountId,
             )
             txnRepository.add(txn)
             paymentRepository.setStatus(payment.id, PaymentStatus.PAID, txn.id)
@@ -445,11 +466,5 @@ class MainViewModel @Inject constructor(
 
     fun clearReceipt() {
         _receipt.value = ReceiptUiState.Idle
-    }
-
-    companion object {
-        // TODO(Sprint 3): reemplazar por selección real de cuenta (AccountDao).
-        const val ACCOUNT_CASH = "acc-cash"
-        const val ACCOUNT_USD = "acc-usd"
     }
 }

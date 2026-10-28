@@ -39,8 +39,12 @@ class ExchangeRateUpdater @Inject constructor(
         val now = System.currentTimeMillis()
         val cached = settings.allLiveRates()
 
-        if (!force && cached.size >= REQUIRED_REFERENCES &&
-            cached.values.all { isFreshEnough(it.fetchedAtMillis, now) }
+        // La tabla global puede llenar la caché con decenas de divisas sin que
+        // BCV, EUR o ARS estén presentes. Solo se evita la descarga cuando las
+        // referencias específicas están frescas.
+        if (!force && REQUIRED_CODES.all { code ->
+                cached[code]?.let { isFreshEnough(it.fetchedAtMillis, now) } == true
+            }
         ) {
             return false
         }
@@ -74,8 +78,8 @@ class ExchangeRateUpdater @Inject constructor(
         /** Seis horas: suficiente para el día sin castigar la batería ni los APIs. */
         const val MAX_AGE_MILLIS = 6L * 60L * 60L * 1000L
 
-        /** VES + EUR + ARS. */
-        const val REQUIRED_REFERENCES = 3
+        /** Referencias específicas que deben existir (VES activa, EUR y ARS). */
+        private val REQUIRED_CODES = listOf("VES", "EUR", "ARS")
 
         fun isFreshEnough(fetchedAtMillis: Long, nowMillis: Long): Boolean {
             val age = nowMillis - fetchedAtMillis

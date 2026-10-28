@@ -1,5 +1,7 @@
 package com.suarezmillan.finanzas.di
 
+import com.suarezmillan.finanzas.data.repo.AccountRepository
+import com.suarezmillan.finanzas.data.repo.AccountRepositoryImpl
 import com.suarezmillan.finanzas.data.repo.AuthRepository
 import com.suarezmillan.finanzas.data.repo.AuthRepositoryImpl
 import com.suarezmillan.finanzas.data.repo.BudgetRepository
@@ -19,6 +21,10 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindAccountRepository(impl: AccountRepositoryImpl): AccountRepository
 
     @Binds
     @Singleton
