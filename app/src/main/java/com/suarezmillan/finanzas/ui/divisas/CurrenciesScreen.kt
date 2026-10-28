@@ -1,0 +1,380 @@
+package com.suarezmillan.finanzas.ui.divisas
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import com.suarezmillan.finanzas.core.currency.CurrencyQuote
+import com.suarezmillan.finanzas.core.currency.Region
+import com.suarezmillan.finanzas.core.money.MoneyFormat
+
+/**
+ * Catálogo completo de divisas, agrupado por región y con los países que usan
+ * cada una. Cada fila muestra cuánto vale **1 unidad en USD y en EUR**.
+ *
+ * Las tasas son una referencia offline incluida en la app; el usuario puede
+ * fijar una manual (se marca con `manual`).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CurrenciesScreen(
+    quotes: List<CurrencyQuote>,
+    baseCurrency: String,
+    secondaryCurrency: String,
+    onBack: () -> Unit,
+    onSetBase: (String) -> Unit,
+    onSetSecondary: (String) -> Unit,
+    onSetManualRate: (String, Double) -> Unit,
+    onClearManualRate: (String) -> Unit,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    var selected by remember { mutableStateOf<CurrencyQuote?>(null) }
+    var manualTarget by remember { mutableStateOf<CurrencyQuote?>(null) }
+
+    val filtered = remember(quotes, query) {
+        val q = query.trim()
+        if (q.isEmpty()) quotes
+        else quotes.filter { quote ->
+            quote.code.contains(q, ignoreCase = true) ||
+                quote.name.contains(q, ignoreCase = true) ||
+                quote.countries.any { it.name.contains(q, ignoreCase = true) }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Divisas") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Volver")
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth().padding(innerPadding),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            item {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text("Buscar país, divisa o código") },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            item {
+                Text(
+                    text = "Referencia offline incluida en la app · ${quotes.size} divisas. " +
+                        "Fija una tasa manual si tu país cotiza distinto.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+            }
+
+            Region.entries.forEach { region ->
+                val regionQuotes = filtered.filter { it.region == region }
+                if (regionQuotes.isEmpty()) return@forEach
+
+                item(key = "region-${region.name}") {
+                    Text(
+                        text = region.label.uppercase(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 14.dp, bottom = 4.dp),
+                    )
+                }
+
+                items(regionQuotes, key = { it.code }) { quote ->
+                    CurrencyRow(
+                        quote = quote,
+                        isBase = quote.code == baseCurrency,
+                        isSecondary = quote.code == secondaryCurrency,
+                        onClick = { selected = quote },
+                    )
+                }
+            }
+        }
+    }
+
+    selected?.let { quote ->
+        CurrencyDetailDialog(
+            quote = quote,
+            isBase = quote.code == baseCurrency,
+            isSecondary = quote.code == secondaryCurrency,
+            onSetBase = {
+                onSetBase(quote.code)
+                selected = null
+            },
+            onSetSecondary = {
+                onSetSecondary(quote.code)
+                selected = null
+            },
+            onFixManual = {
+                selected = null
+                manualTarget = quote
+            },
+            onClearManual = {
+                onClearManualRate(quote.code)
+                selected = null
+            },
+            onDismiss = { selected = null },
+        )
+    }
+
+    manualTarget?.let { quote ->
+        ManualRateDialog(
+            quote = quote,
+            onConfirm = { value ->
+                onSetManualRate(quote.code, value)
+                manualTarget = null
+            },
+            onDismiss = { manualTarget = null },
+        )
+    }
+}
+
+@Composable
+private fun CurrencyRow(
+    quote: CurrencyQuote,
+    isBase: Boolean,
+    isSecondary: Boolean,
+    onClick: () -> Unit,
+) {
+    val flags = quote.countries.take(2).joinToString(" ") { it.flag }
+    val countries = quote.countries.joinToString(" · ") { it.name }
+
+    Card(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = flags.ifEmpty { "🏳️" }, style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = quote.code,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    if (isBase) Badge("base")
+                    if (isSecondary) Badge("2ª")
+                    if (quote.isManual) Badge("manual")
+                }
+                Text(
+                    text = countries.ifEmpty { quote.name },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "1 ${quote.code}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = "${MoneyFormat.formatRate(quote.usdPerUnit)} USD",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "${MoneyFormat.formatRate(quote.eurPerUnit)} EUR",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun Badge(text: String) {
+    Surface(
+        shape = MaterialTheme.shapes.extraSmall,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.padding(start = 6.dp),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        )
+    }
+}
+
+@Composable
+private fun CurrencyDetailDialog(
+    quote: CurrencyQuote,
+    isBase: Boolean,
+    isSecondary: Boolean,
+    onSetBase: () -> Unit,
+    onSetSecondary: () -> Unit,
+    onFixManual: () -> Unit,
+    onClearManual: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+        ) {
+            Column(Modifier.padding(20.dp)) {
+                Text(
+                    text = "${quote.code} · ${quote.name}",
+                    style = MaterialTheme.typography.titleLarge,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = quote.countries.joinToString(", ") { "${it.flag} ${it.name}" }.ifEmpty { "—" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(14.dp))
+                RateLine("1 ${quote.code}", "${MoneyFormat.formatRate(quote.usdPerUnit)} USD")
+                RateLine("", "${MoneyFormat.formatRate(quote.eurPerUnit)} EUR")
+                RateLine("1 USD", "${MoneyFormat.formatRate(quote.unitsPerUsd)} ${quote.code}")
+                if (quote.isManual) {
+                    Text(
+                        "Tasa manual activa",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+                Column(horizontalAlignment = Alignment.End, modifier = Modifier.fillMaxWidth()) {
+                    if (!isBase && !isSecondary) {
+                        DialogAction("Usar como base", onSetBase)
+                    }
+                    if (!isSecondary && !isBase) {
+                        DialogAction("Usar como secundaria", onSetSecondary)
+                    }
+                    DialogAction(
+                        text = if (quote.isManual) "Cambiar tasa manual" else "Fijar tasa manual",
+                        onClick = onFixManual,
+                    )
+                    if (quote.isManual) {
+                        DialogAction("Quitar tasa manual", onClearManual)
+                    }
+                    TextButton(onClick = onDismiss) { Text("Cerrar") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DialogAction(text: String, onClick: () -> Unit) {
+    TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Text(text, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.End)
+    }
+}
+
+@Composable
+private fun RateLine(left: String, right: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        Text(
+            text = left,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Text(text = right, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun ManualRateDialog(
+    quote: CurrencyQuote,
+    onConfirm: (Double) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var value by rememberSaveable { mutableStateOf("") }
+    val parsed = value.replace(',', '.').toDoubleOrNull()
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+        ) {
+            Column(Modifier.padding(20.dp)) {
+                Text("Tasa manual", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "¿Cuántos ${quote.code} equivalen a 1 USD?",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    label = { Text("1 USD = ${quote.code}") },
+                    singleLine = true,
+                    isError = value.isNotEmpty() && parsed == null,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                    TextButton(onClick = onDismiss) { Text("Cancelar") }
+                    TextButton(
+                        onClick = { parsed?.let(onConfirm) },
+                        enabled = parsed != null && parsed > 0.0,
+                    ) { Text("Guardar") }
+                }
+            }
+        }
+    }
+}

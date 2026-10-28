@@ -1,0 +1,24 @@
+# Gradle
+.gradle/
+build/
+local.properties
+*.iml
+
+# Android Studio
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Salidas
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Room: los esquemas SÍ se versionan, pero no las salidas de KSP
+.kotlin/
+
+# Sistema
+.DS_Store
+Thumbs.db

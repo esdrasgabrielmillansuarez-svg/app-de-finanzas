@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Finanzas</string>
+    <string name="tab_hoy">Hoy</string>
+    <string name="tab_movimientos">Movs</string>
+    <string name="tab_plan">Plan</string>
+    <string name="tab_ajustes">Ajustes</string>
+    <string name="fab_registrar">Registrar movimiento</string>
+    <string name="action_guardar">Guardar</string>
+    <string name="action_deshacer">Deshacer</string>
+</resources>

@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototipo — App de Finanzas</title>
+<style>
+  /* ============================================================
+     TOKENS (mapean 1:1 a ColorScheme / Typography / Shapes / Motion)
+     ============================================================ */
+  :root[data-theme="dark"]{
+    --bg:#0E1116; --surface:#161B22; --surface-hi:#1E252E; --line:#252E39;
+    --text:#F2F5F8; --text-2:#93A0AE; --text-3:#6B7785;
+    --local:#4CC9F0; --usd:#FFB020; --in:#34D399; --out:#FF7A6B;
+    --warn:#FFB020; --danger:#FF5A5A;
+    --shadow:0 24px 60px rgba(0,0,0,.55);
+    --glow:0 0 0 1px rgba(76,201,240,.14), 0 10px 30px rgba(76,201,240,.10);
+  }
+  :root[data-theme="light"]{
+    --bg:#F7F8FA; --surface:#FFFFFF; --surface-hi:#EEF1F5; --line:#E2E7ED;
+    --text:#0E1116; --text-2:#5B6673; --text-3:#8A95A1;
+    --local:#0E86A8; --usd:#A86A00; --in:#0B7A55; --out:#B23A2C;
+    --warn:#A86A00; --danger:#C02B2B;
+    --shadow:0 24px 60px rgba(16,24,40,.16);
+    --glow:0 0 0 1px rgba(14,134,168,.16), 0 10px 30px rgba(14,134,168,.10);
+  }
+
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0; background:
+      radial-gradient(900px 500px at 15% -10%, rgba(76,201,240,.10), transparent 60%),
+      radial-gradient(700px 400px at 95% 0%, rgba(255,176,32,.08), transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    display:flex; flex-direction:column; align-items:center;
+    padding:24px 16px 40px; gap:20px; transition:background .3s;
+  }
+
+  /* ---------- barra de control (fuera del teléfono) ---------- */
+  .toolbar{display:flex; gap:8px; flex-wrap:wrap; justify-content:center; align-items:center}
+  .toolbar .brand{font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-2); margin-right:6px}
+  .tbtn{
+    background:var(--surface); border:1px solid var(--line); color:var(--text-2);
+    font:inherit; font-size:12px; font-weight:600; padding:7px 12px; border-radius:999px; cursor:pointer;
+  }
+  .tbtn[aria-pressed="true"]{background:var(--surface-hi); color:var(--text); border-color:var(--text-3)}
+
+  /* ---------- teléfono ---------- */
+  .phone{
+    position:relative; flex:0 0 auto; width:390px; height:844px; border-radius:48px;
+    background:var(--bg); border:1px solid var(--line);
+    box-shadow:var(--shadow); overflow:hidden; display:flex; flex-direction:column;
+    transition:background .3s;
+  }
+  .notch{position:absolute; top:10px; left:50%; transform:translateX(-50%); width:112px; height:26px; border-radius:999px; background:#000; z-index:60}
+  .statusbar{height:46px; flex:0 0 46px; display:flex; align-items:flex-end; justify-content:space-between; padding:0 22px 4px; font-size:11px; font-weight:600; color:var(--text-2); z-index:50}
+  .statusbar .right{display:flex; gap:5px; align-items:center}
+
+  .viewport{flex:1; position:relative; overflow:hidden}
+  .screen{position:absolute; inset:0; overflow-y:auto; padding:6px 18px 108px; scrollbar-width:none}
+  .screen::-webkit-scrollbar{display:none}
+  .screen[hidden]{display:none}
+
+  /* ---------- tipografía ---------- */
+  .label{font-size:12px; line-height:16px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--text-2)}
+  .title{font-size:20px; line-height:28px; font-weight:600; letter-spacing:-.01em}
+  .money{font-variant-numeric:tabular-nums; font-feature-settings:"tnum","zero"; letter-spacing:-.02em}
+  .display{font-size:40px; line-height:44px; font-weight:700}
+  .small{font-size:13px; color:var(--text-2)}
+  .tiny{font-size:11px; color:var(--text-3)}
+
+  /* ---------- superficie ---------- */
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:20px; padding:16px}
+  .card.hero{border-radius:28px; padding:20px; box-shadow:var(--glow)}
+  .row{display:flex; align-items:center; gap:12px}
+  .spread{display:flex; align-items:center; justify-content:space-between; gap:12px}
+  .stack{display:flex; flex-direction:column}
+
+  /* ---------- saldo ---------- */
+  .balusd{font-size:14px; color:var(--text-2); font-variant-numeric:tabular-nums}
+  .ratechip{display:inline-flex; align-items:center; gap:6px; background:var(--surface-hi); border-radius:999px; padding:5px 10px; font-size:11px; color:var(--text-2); font-weight:600}
+  .dot{width:7px; height:7px; border-radius:50%; flex:0 0 7px}
+  .dot.local{background:var(--local)} .dot.usd{background:var(--usd)}
+  .badge{font-size:10px; font-weight:700; letter-spacing:.04em; background:rgba(255,176,32,.16); color:var(--warn); padding:2px 6px; border-radius:6px}
+
+  /* ---------- barras ---------- */
+  .bar{height:8px; border-radius:999px; background:var(--surface-hi); overflow:hidden; display:flex}
+  .bar > i{display:block; height:100%; border-radius:999px; background:var(--local); transition:width .5s cubic-bezier(.2,.8,.2,1)}
+  .bar.warn > i{background:var(--warn)} .bar.danger > i{background:var(--danger)}
+  .seg{display:flex; height:10px; gap:3px}
+  .seg > i{display:block; height:100%; border-radius:3px; background:var(--local)}
+
+  /* ---------- lista movimientos ---------- */
+  .txn{display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--line)}
+  .txn:last-child{border-bottom:none}
+  .icn{width:40px; height:40px; border-radius:14px; display:grid; place-items:center; font-size:18px; background:var(--surface-hi); flex:0 0 40px}
+  .txn .name{font-size:15px; font-weight:600; line-height:20px}
+  .txn .meta{font-size:12px; color:var(--text-3)}
+  .txn .amt{font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; margin-left:auto; text-align:right}
+  .out{color:var(--out)} .in{color:var(--in)}
+
+  /* ---------- chips ---------- */
+  .chips{display:flex; gap:8px; overflow-x:auto; padding:2px 0 6px; scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex:0 0 auto; display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 12px; border-radius:999px; background:var(--surface-hi); border:1px solid transparent; color:var(--text-2); font-size:13px; font-weight:600; cursor:pointer}
+  .chip[aria-pressed="true"]{background:rgba(76,201,240,.14); border-color:var(--local); color:var(--text)}
+
+  /* ---------- segmented ---------- */
+  .segctl{display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; background:var(--surface-hi); border-radius:999px; padding:4px}
+  .segctl button{border:none; background:transparent; color:var(--text-2); font:inherit; font-size:13px; font-weight:600; height:34px; border-radius:999px; cursor:pointer}
+  .segctl button[aria-pressed="true"]{background:var(--surface); color:var(--text); box-shadow:0 1px 3px rgba(0,0,0,.25)}
+
+  /* ---------- nav ---------- */
+  .nav{
+    position:absolute; left:0; right:0; bottom:0; height:88px; z-index:40;
+    background:color-mix(in srgb, var(--surface) 88%, transparent);
+    backdrop-filter:blur(18px); border-top:1px solid var(--line);
+    display:grid; grid-template-columns:repeat(5,1fr); align-items:start; padding:10px 8px 0;
+  }
+  .nav button{background:none; border:none; color:var(--text-3); font:inherit; font-size:10px; font-weight:600; display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 0; cursor:pointer}
+  .nav button .gl{font-size:19px; line-height:22px}
+  .nav button[aria-current="page"]{color:var(--text)}
+  .nav button[aria-current="page"] .gl{color:var(--local)}
+  .fab{
+    width:58px; height:58px; border-radius:20px; border:none; cursor:pointer;
+    background:linear-gradient(145deg,var(--local),color-mix(in srgb,var(--local) 55%,#0b3d4a));
+    color:#04181f; font-size:26px; font-weight:600; display:grid; place-items:center;
+    box-shadow:0 10px 22px rgba(76,201,240,.34), inset 0 1px 0 rgba(255,255,255,.35);
+    transform:translateY(-14px); transition:transform .18s cubic-bezier(.2,1.4,.4,1);
+  }
+  .fab:active{transform:translateY(-14px) scale(.94)}
+
+  /* ---------- sheet ---------- */
+  .scrim{position:absolute; inset:0; background:rgba(0,0,0,.55); opacity:0; pointer-events:none; transition:opacity .22s; z-index:70}
+  .scrim.on{opacity:1; pointer-events:auto}
+  .sheet{
+    position:absolute; left:0; right:0; bottom:0; z-index:80;
+    background:var(--surface); border-radius:28px 28px 0 0; border-top:1px solid var(--line);
+    padding:8px 16px 14px; transform:translateY(102%); transition:transform .28s cubic-bezier(.2,.9,.2,1);
+    box-shadow:0 -20px 50px rgba(0,0,0,.4);
+  }
+  .sheet.on{transform:translateY(0)}
+  .handle{width:40px; height:4px; border-radius:999px; background:var(--line); margin:4px auto 10px}
+  .amount{font-size:32px; line-height:38px; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:-.02em; text-align:right; min-height:38px}
+  .expr{text-align:right; font-size:12px; color:var(--text-3); height:16px; font-variant-numeric:tabular-nums}
+  .key{
+    height:50px; border-radius:18px; border:1px solid var(--line); background:var(--surface-hi);
+    color:var(--text); font:inherit; font-size:19px; font-weight:600; cursor:pointer;
+    display:grid; place-items:center; font-variant-numeric:tabular-nums;
+  }
+  .key:active{background:var(--surface); transform:scale(.97)}
+  .key.op{color:var(--local); font-size:17px}
+  .key.del{color:var(--text-2); font-size:16px}
+  .save{
+    width:100%; height:52px; border-radius:999px; border:none; cursor:pointer;
+    background:linear-gradient(180deg,var(--local),color-mix(in srgb,var(--local) 78%,#000));
+    color:#04181f; font:inherit; font-size:16px; font-weight:700; letter-spacing:.01em;
+    box-shadow:0 8px 20px rgba(76,201,240,.28);
+  }
+  .save:disabled{opacity:.38; box-shadow:none; cursor:not-allowed}
+
+  /* ---------- toast ---------- */
+  .toast{
+    position:absolute; left:16px; right:16px; bottom:104px; z-index:90;
+    background:var(--surface-hi); border:1px solid var(--line); border-radius:16px;
+    padding:12px 14px; display:flex; align-items:center; gap:12px; font-size:13px;
+    transform:translateY(20px); opacity:0; pointer-events:none; transition:.22s;
+  }
+  .toast.on{transform:translateY(0); opacity:1; pointer-events:auto}
+  .toast b{font-weight:700}
+  .toast button{margin-left:auto; background:none; border:none; color:var(--local); font:inherit; font-weight:700; font-size:13px; cursor:pointer}
+
+  /* ---------- calendario ---------- */
+  .cal{display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:10px}
+  .cal .dow{font-size:10px; color:var(--text-3); text-align:center; font-weight:600; padding-bottom:2px}
+  .day{aspect-ratio:1; border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; font-size:12px; font-weight:600; color:var(--text-2); background:transparent}
+  .day.today{background:var(--surface-hi); color:var(--text); box-shadow:inset 0 0 0 1px var(--local)}
+  .day .dots{display:flex; gap:2px; height:4px}
+  .day .dots i{width:4px; height:4px; border-radius:50%; background:var(--local)}
+  .day .dots i.ok{background:var(--in)} .day .dots i.soon{background:var(--warn)} .day .dots i.late{background:var(--danger); border-radius:0; width:3px; height:3px}
+  .legend{display:flex; gap:14px; flex-wrap:wrap; margin-top:12px; font-size:11px; color:var(--text-3)}
+  .legend span{display:inline-flex; align-items:center; gap:5px}
+
+  /* ---------- deuda ---------- */
+  .debt{padding:14px 0; border-bottom:1px solid var(--line)}
+  .debt:last-child{border-bottom:none}
+  .avatar{width:34px; height:34px; border-radius:50%; display:grid; place-items:center; background:var(--surface-hi); font-size:12px; font-weight:700; color:var(--text-2); flex:0 0 34px}
+
+  .sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="brand">Prototipo · Fase 1</span>
+  <button class="tbtn" id="themeBtn" aria-pressed="false">◐ Claro / Oscuro</button>
+  <button class="tbtn" data-jump="hoy" aria-pressed="true">Hoy</button>
+  <button class="tbtn" data-jump="movs">Movimientos</button>
+  <button class="tbtn" data-jump="plan">Plan</button>
+  <button class="tbtn" data-jump="ajustes">Ajustes</button>
+</div>
+
+<div class="phone">
+  <div class="notch"></div>
+  <div class="statusbar">
+    <span>9:41</span>
+    <span class="right"><span>▮▮▮</span><span>◍</span><span>100%</span></span>
+  </div>
+
+  <div class="viewport">
+    <!-- ================= HOY ================= -->
+    <section class="screen" id="s-hoy">
+      <div class="spread" style="margin:10px 0 14px">
+        <div>
+          <div class="label">Octubre</div>
+          <div class="title">Hola, Suárez</div>
+        </div>
+        <button class="icn" aria-label="Buscar" style="border:none;cursor:pointer">⌕</button>
+      </div>
+
+      <div class="card hero">
+        <div class="row" style="gap:8px; margin-bottom:6px">
+          <span class="dot local"></span>
+          <span class="label">Saldo en pesos</span>
+        </div>
+        <div class="display money" id="balLocal">$ 1.284.500,00</div>
+        <div class="row" style="gap:8px; margin-top:6px">
+          <span class="dot usd"></span>
+          <span class="balusd">US$ 1.020,45</span>
+        </div>
+        <div class="row" style="margin-top:14px; gap:8px; flex-wrap:wrap">
+          <span class="ratechip"><span class="dot local"></span>1 US$ = 4.120,50 ⟳</span>
+          <span class="ratechip">hace 2 h</span>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="spread" style="margin-bottom:10px">
+          <div>
+            <div class="label">Te queda este mes</div>
+            <div class="money" style="font-size:24px;font-weight:700;margin-top:2px">$ 284.500</div>
+          </div>
+          <div style="text-align:right">
+            <div class="tiny">de $ 600.000</div>
+            <div class="tiny" style="color:var(--warn);font-weight:700;margin-top:2px">47% usado</div>
+          </div>
+        </div>
+        <div class="seg" aria-hidden="true">
+          <i style="width:22%"></i><i style="width:15%;background:color-mix(in srgb,var(--local) 62%,transparent)"></i>
+          <i style="width:10%;background:var(--warn)"></i>
+        </div>
+        <div class="row" style="justify-content:space-between;margin-top:10px">
+          <span class="tiny">Comida 22% · Transporte 15% · Ocio 10%</span>
+          <span class="tiny" style="color:var(--local);font-weight:700">Ver sobres →</span>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="spread">
+          <div class="stack" style="gap:2px">
+            <span class="label">Proyección al 31 oct</span>
+            <span class="money" style="font-size:22px;font-weight:700">≈ $ 152.000</span>
+            <span class="tiny">3 pagos fijos · 1 ingreso esperado</span>
+          </div>
+          <div style="font-size:26px">📉</div>
+        </div>
+      </div>
+
+      <div class="spread" style="margin:20px 0 4px">
+        <span class="label">Últimos movimientos</span>
+        <span class="tiny" style="color:var(--local);font-weight:700">Ver todos</span>
+      </div>
+      <div id="txnList"></div>
+    </section>
+
+    <!-- ================= MOVIMIENTOS ================= -->
+    <section class="screen" id="s-movs" hidden>
+      <div class="title" style="margin:12px 0 12px">Movimientos</div>
+      <div class="card" style="padding:10px 14px; display:flex; align-items:center; gap:10px; color:var(--text-3)">
+        <span>⌕</span><span style="font-size:14px">Buscar comercio, nota o monto</span>
+      </div>
+      <div class="chips" style="margin-top:12px">
+        <button class="chip" aria-pressed="true">Todo</button>
+        <button class="chip" aria-pressed="false"><span class="dot local"></span>Pesos</button>
+        <button class="chip" aria-pressed="false"><span class="dot usd"></span>USD</button>
+        <button class="chip" aria-pressed="false">Efectivo</button>
+        <button class="chip" aria-pressed="false">Comida</button>
+      </div>
+
+      <div class="label" style="margin:14px 0 2px">Hoy</div>
+      <div id="movsToday"></div>
+      <div class="label" style="margin:16px 0 2px">Ayer</div>
+      <div class="txn">
+        <div class="icn">🚕</div>
+        <div class="stack"><span class="name">Viaje</span><span class="meta">Efectivo · 20:14</span></div>
+        <span class="amt out">− $ 1.200,00</span>
+      </div>
+      <div class="txn">
+        <div class="icn">🛒</div>
+        <div class="stack"><span class="name">Supermercado</span><span class="meta">Débito · 18:02</span></div>
+        <span class="amt out">− $ 18.430,00</span>
+      </div>
+      <div class="txn">
+        <div class="icn">💵</div>
+        <div class="stack"><span class="name">Cobro freelance</span><span class="meta">USD · 11:30</span></div>
+        <span class="amt in">+ US$ 250,00</span>
+      </div>
+    </section>
+
+    <!-- ================= PLAN ================= -->
+    <section class="screen" id="s-plan" hidden>
+      <div class="title" style="margin:12px 0 12px">Plan</div>
+      <div class="segctl" id="planTabs">
+        <button aria-pressed="true" data-plan="sobres">Sobres</button>
+        <button aria-pressed="false" data-plan="cal">Calendario</button>
+        <button aria-pressed="false" data-plan="deudas">Deudas</button>
+      </div>
+
+      <div data-panel="sobres">
+        <div class="spread" style="margin:16px 0 8px">
+          <span class="label">Octubre</span>
+          <span class="tiny" style="color:var(--local);font-weight:700">Mover dinero</span>
+        </div>
+
+        <div class="card" style="margin-bottom:10px">
+          <div class="spread"><span class="row" style="gap:8px"><span class="icn" style="width:30px;height:30px;border-radius:10px;font-size:14px">🛒</span><b style="font-size:14px">Comida</b></span>
+            <span class="tiny">queda <b style="color:var(--text)">$ 46.200</b> de $ 130.000</span></div>
+          <div class="bar" style="margin-top:12px"><i style="width:64%"></i></div>
+        </div>
+
+        <div class="card" style="margin-bottom:10px">
+          <div class="spread"><span class="row" style="gap:8px"><span class="icn" style="width:30px;height:30px;border-radius:10px;font-size:14px">🚕</span><b style="font-size:14px">Transporte</b></span>
+            <span class="tiny">queda <b style="color:var(--text)">$ 9.800</b> de $ 60.000</span></div>
+          <div class="bar warn" style="margin-top:12px"><i style="width:84%"></i></div>
+          <div class="tiny" style="margin-top:8px;color:var(--warn);font-weight:600">⚠ 84% usado · te quedan 4 días</div>
+        </div>
+
+        <div class="card" style="margin-bottom:10px">
+          <div class="spread"><span class="row" style="gap:8px"><span class="icn" style="width:30px;height:30px;border-radius:10px;font-size:14px">🎬</span><b style="font-size:14px">Ocio</b></span>
+            <span class="tiny">te pasaste <b style="color:var(--danger)">$ 12.000</b></span></div>
+          <div class="bar danger" style="margin-top:12px"><i style="width:100%"></i></div>
+          <div class="tiny" style="margin-top:8px;color:var(--danger);font-weight:600">▲ 108% · excedido</div>
+        </div>
+
+        <div class="card" style="border-style:dashed; background:transparent; text-align:center; color:var(--text-2); font-size:13px; font-weight:600">+ Nuevo sobre</div>
+      </div>
+
+      <div data-panel="cal" hidden>
+        <div class="card" style="margin-top:16px">
+          <div class="spread"><b style="font-size:14px">Octubre 2026</b><span class="tiny">‹ ›</span></div>
+          <div class="cal" id="cal"></div>
+          <div class="legend">
+            <span><i class="dot" style="background:var(--in)"></i>Pagado</span>
+            <span><i class="dot" style="background:var(--warn)"></i>Próximo</span>
+            <span><i class="dot" style="background:var(--danger)"></i>Vencido</span>
+          </div>
+        </div>
+
+        <div class="label" style="margin:18px 0 6px">Próximos 7 días</div>
+        <div class="txn">
+          <div class="icn">🎧</div>
+          <div class="stack"><span class="name">Spotify</span><span class="meta">30 oct · Tarjeta</span></div>
+          <span class="amt">$ 4.900,00</span>
+        </div>
+        <div class="txn">
+          <div class="icn" style="color:var(--danger)">▲</div>
+          <div class="stack"><span class="name">Internet</span><span class="meta">2 nov · Débito · <span style="color:var(--danger)">vencido</span></span></div>
+          <span class="amt">$ 12.500,00</span>
+        </div>
+        <div class="txn">
+          <div class="icn">💳</div>
+          <div class="stack"><span class="name">Tarjeta Visa</span><span class="meta">5 nov · Pago mínimo</span></div>
+          <span class="amt">US$ 85,00</span>
+        </div>
+      </div>
+
+      <div data-panel="deudas" hidden>
+        <div class="segctl" style="margin-top:16px;max-width:230px" id="debtTabs">
+          <button aria-pressed="true" data-debt="me">Me deben</button>
+          <button aria-pressed="false" data-debt="debo">Debo</button>
+        </div>
+        <div class="card" style="margin-top:14px">
+          <div class="debt" data-debt-panel="me">
+            <div class="row" style="gap:10px"><span class="avatar">JM</span>
+              <div class="stack" style="flex:1"><b style="font-size:14px">Juan M.</b><span class="tiny">vence 3 nov</span></div>
+              <div class="stack" style="text-align:right"><b class="money" style="font-size:14px">$ 40.000</b><span class="tiny">de $ 60.000</span></div>
+            </div>
+            <div class="bar" style="margin-top:10px"><i style="width:66%;background:var(--in)"></i></div>
+          </div>
+          <div class="debt" data-debt-panel="me">
+            <div class="row" style="gap:10px"><span class="avatar">AR</span>
+              <div class="stack" style="flex:1"><b style="font-size:14px">Ana R.</b><span class="tiny">sin fecha</span></div>
+              <div class="stack" style="text-align:right"><b class="money" style="font-size:14px">US$ 20,00</b><span class="tiny">pendiente</span></div>
+            </div>
+            <div class="bar" style="margin-top:10px"><i style="width:0%"></i></div>
+          </div>
+          <div class="debt" data-debt-panel="debo" hidden>
+            <div class="row" style="gap:10px"><span class="avatar">LP</span>
+              <div class="stack" style="flex:1"><b style="font-size:14px">Luis P.</b><span class="tiny">vence hoy</span></div>
+              <div class="stack" style="text-align:right"><b class="money" style="font-size:14px">$ 25.000</b><span class="tiny">de $ 25.000</span></div>
+            </div>
+            <div class="bar warn" style="margin-top:10px"><i style="width:20%"></i></div>
+          </div>
+        </div>
+        <button class="save" style="margin-top:16px">Registrar abono</button>
+      </div>
+    </section>
+
+    <!-- ================= AJUSTES ================= -->
+    <section class="screen" id="s-ajustes" hidden>
+      <div class="title" style="margin:12px 0 14px">Ajustes</div>
+      <div class="card" style="padding:4px 16px">
+        <div class="txn"><div class="icn">💱</div><div class="stack"><span class="name">Divisas y tasa</span><span class="meta">Peso · USD · manual</span></div><span style="margin-left:auto;color:var(--text-3)">›</span></div>
+        <div class="txn"><div class="icn">🏦</div><div class="stack"><span class="name">Cuentas</span><span class="meta">2 cuentas</span></div><span style="margin-left:auto;color:var(--text-3)">›</span></div>
+        <div class="txn"><div class="icn">🏷️</div><div class="stack"><span class="name">Categorías</span><span class="meta">12 activas</span></div><span style="margin-left:auto;color:var(--text-3)">›</span></div>
+        <div class="txn"><div class="icn">🔒</div><div class="stack"><span class="name">Bloqueo biométrico</span><span class="meta">Huella activada</span></div><span style="margin-left:auto;color:var(--in);font-weight:700">ON</span></div>
+        <div class="txn"><div class="icn">📤</div><div class="stack"><span class="name">Exportar</span><span class="meta">CSV · PDF</span></div><span style="margin-left:auto;color:var(--text-3)">›</span></div>
+      </div>
+      <div class="tiny" style="text-align:center;margin-top:18px">100% offline · datos cifrados en el dispositivo</div>
+    </section>
+
+    <!-- ================= NAV ================= -->
+    <nav class="nav" aria-label="Navegación principal">
+      <button data-nav="hoy" aria-current="page"><span class="gl">◎</span>Hoy</button>
+      <button data-nav="movs"><span class="gl">≡</span>Movs</button>
+      <div style="display:grid;place-items:center">
+        <button class="fab" id="fab" aria-label="Registrar movimiento">+</button>
+      </div>
+      <button data-nav="plan"><span class="gl">◫</span>Plan</button>
+      <button data-nav="ajustes"><span class="gl">⚙</span>Ajustes</button>
+    </nav>
+
+    <!-- ================= SCRIM + SHEET ================= -->
+    <div class="scrim" id="scrim"></div>
+
+    <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Registrar movimiento">
+      <div class="handle"></div>
+
+      <div class="segctl" style="margin-bottom:12px">
+        <button aria-pressed="true" data-type="gasto">Gasto</button>
+        <button aria-pressed="false" data-type="ingreso">Ingreso</button>
+        <button aria-pressed="false" data-type="transf">Transferencia</button>
+      </div>
+
+      <div class="amount money" id="amount" aria-live="polite">$ 0,00</div>
+      <div class="expr" id="expr"></div>
+
+      <div class="row" style="gap:8px; margin:6px 0 10px">
+        <button class="chip" id="curLocal" aria-pressed="true" style="height:30px"><span class="dot local"></span>Peso</button>
+        <button class="chip" id="curUsd" aria-pressed="false" style="height:30px"><span class="dot usd"></span>USD</button>
+        <span class="tiny" style="margin-left:auto" id="rateHint">1 US$ = 4.120,50</span>
+      </div>
+
+      <div class="chips" id="cats">
+        <button class="chip" aria-pressed="true">🛒 Súper</button>
+        <button class="chip" aria-pressed="false">🍔 Comida</button>
+        <button class="chip" aria-pressed="false">🚕 Transporte</button>
+        <button class="chip" aria-pressed="false">🏠 Casa</button>
+        <button class="chip" aria-pressed="false">🎬 Ocio</button>
+        <button class="chip" aria-pressed="false">＋</button>
+      </div>
+
+      <div class="spread" style="margin:2px 0 10px">
+        <span class="tiny">Efectivo · hoy, 9:41</span>
+        <span class="tiny" style="color:var(--local);font-weight:700">Cambiar</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+        <button class="key">1</button><button class="key">2</button><button class="key">3</button><button class="key del" data-k="del" aria-label="Borrar">⌫</button>
+        <button class="key">4</button><button class="key">5</button><button class="key">6</button><button class="key op" data-k="+">+</button>
+        <button class="key">7</button><button class="key">8</button><button class="key">9</button><button class="key op" data-k="-">−</button>
+        <button class="key" data-k=",">,</button><button class="key">0</button><button class="key op" data-k="*">×</button><button class="key op" data-k="/">÷</button>
+      </div>
+
+      <button class="save" id="saveBtn" style="margin-top:12px" disabled>Guardar</button>
+    </div>
+
+    <div class="toast" id="toast" role="status">
+      <span id="toastText">Movimiento guardado</span>
+      <button id="undoBtn">Deshacer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   Estado mínimo del prototipo
+   ============================================================ */
+const state = {
+  screen: 'hoy',
+  type: 'gasto',
+  currency: 'LOCAL',
+  expr: '',
+  cat: '🛒 Súper',
+  txns: [
+    { icon:'☕', name:'Café', meta:'Efectivo · 9:12', amt:-950, cur:'LOCAL' },
+    { icon:'🛒', name:'Supermercado', meta:'Débito · 8:40', amt:-18430, cur:'LOCAL' },
+    { icon:'💵', name:'Cobro freelance', meta:'USD · ayer', amt:+250, cur:'USD' },
+    { icon:'🍔', name:'Almuerzo', meta:'Efectivo · ayer', amt:-5200, cur:'LOCAL' },
+    { icon:'🎧', name:'Spotify', meta:'Tarjeta · 26 oct', amt:-4900, cur:'LOCAL' },
+  ],
+  lastRemoved: null,
+};
+
+const $  = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const nf = new Intl.NumberFormat('es-AR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+
+function money(minor, cur){
+  const sym = cur === 'USD' ? 'US$' : '$';
+  return `${sym} ${nf.format(Math.abs(minor)/100)}`;
+}
+
+/* ---------- navegación ---------- */
+function go(screen){
+  state.screen = screen;
+  $$('.screen').forEach(el => el.hidden = el.id !== 's-' + screen);
+  $$('.nav button[data-nav]').forEach(b => {
+    if (b.dataset.nav === screen) b.setAttribute('aria-current','page');
+    else b.removeAttribute('aria-current');
+  });
+  $$('[data-jump]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.jump === screen)));
+}
+
+$$('.nav button[data-nav]').forEach(b => b.onclick = () => go(b.dataset.nav));
+$$('[data-jump]').forEach(b => b.onclick = () => go(b.dataset.jump));
+
+/* ---------- tema ---------- */
+$('#themeBtn').onclick = () => {
+  const root = document.documentElement;
+  const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+  root.dataset.theme = next;
+  $('#themeBtn').setAttribute('aria-pressed', String(next === 'light'));
+};
+
+/* ---------- lista de movimientos ---------- */
+function renderTxns(){
+  const html = state.txns.map(t => `
+    <div class="txn">
+      <div class="icn">${t.icon}</div>
+      <div class="stack"><span class="name">${t.name}</span><span class="meta">${t.meta}</span></div>
+      <span class="amt ${t.amt >= 0 ? 'in' : 'out'}">${t.amt >= 0 ? '+' : '−'} ${money(t.amt, t.cur)}</span>
+    </div>`).join('');
+  $('#txnList').innerHTML = html;
+  $('#movsToday').innerHTML = state.txns.slice(0,3).map(t => `
+    <div class="txn">
+      <div class="icn">${t.icon}</div>
+      <div class="stack"><span class="name">${t.name}</span><span class="meta">${t.meta}</span></div>
+      <span class="amt ${t.amt >= 0 ? 'in' : 'out'}">${t.amt >= 0 ? '+' : '−'} ${money(t.amt, t.cur)}</span>
+    </div>`).join('');
+}
+renderTxns();
+
+/* ---------- sheet ---------- */
+function openSheet(){
+  $('#scrim').classList.add('on');
+  $('#sheet').classList.add('on');
+  renderAmount();
+}
+function closeSheet(){
+  $('#scrim').classList.remove('on');
+  $('#sheet').classList.remove('on');
+  state.expr = '';
+  renderAmount();
+}
+$('#fab').onclick = openSheet;
+$('#scrim').onclick = closeSheet;
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+
+/* ---------- tipo ---------- */
+$$('[data-type]').forEach(b => b.onclick = () => {
+  state.type = b.dataset.type;
+  $$('[data-type]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+});
+
+/* ---------- divisa ---------- */
+function setCurrency(cur){
+  state.currency = cur;
+  $('#curLocal').setAttribute('aria-pressed', String(cur === 'LOCAL'));
+  $('#curUsd').setAttribute('aria-pressed', String(cur === 'USD'));
+  renderAmount();
+}
+$('#curLocal').onclick = () => setCurrency('LOCAL');
+$('#curUsd').onclick   = () => setCurrency('USD');
+
+/* ---------- categorías ---------- */
+$$('#cats .chip').forEach(c => c.onclick = () => {
+  $$('#cats .chip').forEach(x => x.setAttribute('aria-pressed','false'));
+  c.setAttribute('aria-pressed','true');
+  state.cat = c.textContent.trim();
+});
+
+/* ---------- teclado + aritmética inline ---------- */
+function evaluate(expr){
+  if (!expr) return 0;
+  const clean = expr.replace(/,/g,'.');
+  if (!/^[0-9.+\-*/() ]+$/.test(clean)) return 0;
+  try {
+    // eslint-disable-next-line no-new-func
+    const v = Function('"use strict";return (' + clean + ')')();
+    return Number.isFinite(v) ? v : 0;
+  } catch { return 0; }
+}
+
+function renderAmount(){
+  const v = evaluate(state.expr);
+  $('#amount').textContent = money(Math.round(v*100), state.currency);
+  $('#expr').textContent = state.expr && /[+\-*/]/.test(state.expr) ? '= ' + state.expr.replace(/\*/g,'×').replace(/\//g,'÷') : '';
+  $('#saveBtn').disabled = !(v > 0);
+}
+
+$$('.key').forEach(k => k.onclick = () => {
+  const key = k.dataset.k || k.textContent.trim();
+  if (key === 'del') state.expr = state.expr.slice(0, -1);
+  else if ('+-*/'.includes(key)) {
+    if (!state.expr) return;
+    if ('+-*/'.includes(state.expr.slice(-1))) state.expr = state.expr.slice(0, -1);
+    state.expr += key;
+  } else if (key === ',') { if (!state.expr.slice(-1).match(/[0-9]/)) return; state.expr += ','; }
+  else state.expr += key;
+  renderAmount();
+});
+
+/* ---------- guardar + undo ---------- */
+let undoTimer = null;
+$('#saveBtn').onclick = () => {
+  const v = Math.round(evaluate(state.expr) * 100);
+  if (!(v > 0)) return;
+  const t = {
+    icon: state.cat.split(' ')[0] || '💸',
+    name: state.cat.replace(/^\S+\s/,'') || 'Movimiento',
+    meta: (state.currency === 'USD' ? 'USD' : 'Efectivo') + ' · ahora',
+    amt: state.type === 'ingreso' ? v : -v,
+    cur: state.currency,
+  };
+  state.txns.unshift(t);
+  state.lastRemoved = t;
+  renderTxns();
+  closeSheet();
+  $('#toastText').innerHTML = `<b>${t.name}</b> guardado · ${money(v, t.cur)}`;
+  $('#toast').classList.add('on');
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => $('#toast').classList.remove('on'), 5000);
+};
+$('#undoBtn').onclick = () => {
+  if (!state.lastRemoved) return;
+  state.txns = state.txns.filter(t => t !== state.lastRemoved);
+  state.lastRemoved = null;
+  renderTxns();
+  $('#toast').classList.remove('on');
+  clearTimeout(undoTimer);
+};
+
+/* ---------- Plan: tabs ---------- */
+$$('#planTabs button').forEach(b => b.onclick = () => {
+  $$('#planTabs button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  $$('[data-panel]').forEach(p => p.hidden = p.dataset.panel !== b.dataset.plan);
+});
+$$('#debtTabs button').forEach(b => b.onclick = () => {
+  $$('#debtTabs button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  $$('[data-debt-panel]').forEach(p => p.hidden = p.dataset.debtPanel !== b.dataset.debt);
+});
+
+/* ---------- calendario ---------- */
+(function buildCalendar(){
+  const dow = ['L','M','M','J','V','S','D'];
+  const first = new Date(2026, 9, 1);
+  const offset = (first.getDay() + 6) % 7;      // lunes primero
+  const days = new Date(2026, 10, 0).getDate();  // 31
+  const marks = {1:'ok', 5:'soon', 10:'late', 28:'soon', 30:'ok'};
+  let html = dow.map(d => `<div class="dow">${d}</div>`).join('');
+  for (let i=0;i<offset;i++) html += `<div class="day"></div>`;
+  for (let d=1; d<=days; d++){
+    const m = marks[d];
+    html += `<div class="day ${d===28?'today':''}">${d}
+      <span class="dots">${m?`<i class="${m}"></i>`:''}</span></div>`;
+  }
+  $('#cal').innerHTML = html;
+})();
+</script>
+</body>
+</html>
