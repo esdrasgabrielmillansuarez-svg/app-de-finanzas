@@ -39,6 +39,21 @@ interface TxnDao {
     @Query("SELECT COALESCE(SUM(amountMinor), 0) FROM txns WHERE currency = :currency")
     fun observeNetBalance(currency: String): Flow<Long>
 
+    /** Movimientos de un tipo dentro del mes, en todas las divisas. */
+    @Query(
+        """
+        SELECT * FROM txns
+        WHERE type = :type
+          AND occurredAt >= :fromMillis AND occurredAt < :toMillis
+        ORDER BY occurredAt ASC
+        """,
+    )
+    fun observeByTypeBetween(
+        type: String,
+        fromMillis: Long,
+        toMillis: Long,
+    ): Flow<List<TxnEntity>>
+
     @Query(
         """
         SELECT COALESCE(SUM(ABS(amountMinor)), 0) FROM txns

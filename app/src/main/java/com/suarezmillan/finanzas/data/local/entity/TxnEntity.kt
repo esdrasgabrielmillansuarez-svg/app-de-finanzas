@@ -16,6 +16,7 @@ enum class TxnType { EXPENSE, INCOME, TRANSFER }
  *  - `amountMinor` está **en su divisa original** ([currency]); nunca preconvertido.
  *  - `fxRateToBase` es la tasa usada en el momento del registro; `null` si la
  *    transacción ya está en la divisa base.
+ *  - `fxBaseCurrency` recuerda cuál era esa divisa base.
  *  - Cambiar la tasa de hoy no altera filas existentes.
  *
  * Una transferencia entre cuentas crea **dos** filas (una por divisa) unidas por
@@ -55,6 +56,12 @@ data class TxnEntity(
     val note: String? = null,
     val occurredAt: Long = System.currentTimeMillis(),
     val fxRateToBase: Double? = null,
+    /**
+     * Divisa base contra la que se calculó [fxRateToBase]. Permite reconstruir
+     * el gasto histórico aunque hoy la divisa base sea otra. `null` en filas
+     * antiguas: en ese caso se usa la cotización actual para agregados.
+     */
+    val fxBaseCurrency: String? = null,
     val fxSource: FxSource = FxSource.NONE,
     val fxTimestamp: Long? = null,
     val transferGroupId: String? = null,

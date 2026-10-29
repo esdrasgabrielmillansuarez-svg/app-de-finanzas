@@ -1,0 +1,830 @@
+<!doctype html>
+<html lang="es" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Prototipo visual de Finanzas, app de Esdras Millan.">
+  <title>Finanzas · Prototipo Bootstrap</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/app.css" rel="stylesheet">
+</head>
+<body>
+
+<nav class="navbar app-navbar sticky-top">
+  <div class="container-xxl py-2">
+    <a class="navbar-brand d-flex align-items-center gap-2 text-decoration-none" href="#" data-screen="home">
+      <span class="brand-mark">F</span>
+      <span class="d-flex flex-column">
+        <span class="brand-title">Finanzas</span>
+        <span class="brand-subtitle">por Esdras Millan</span>
+      </span>
+    </a>
+    <div class="d-flex align-items-center gap-2">
+      <span class="badge badge-soft rounded-pill d-none d-sm-inline-flex align-items-center">
+        <span class="offline-dot me-2"></span>Local y offline
+      </span>
+      <button class="btn btn-ghost btn-sm px-3" id="themeToggle" type="button" aria-label="Cambiar tema">
+        <i class="bi bi-moon-stars"></i>
+      </button>
+      <button class="btn btn-app btn-sm px-3" type="button" data-bs-toggle="modal" data-bs-target="#txnModal">
+        <i class="bi bi-plus-lg"></i><span class="d-none d-sm-inline ms-1">Registrar</span>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<div class="container-xxl pt-3">
+  <div class="demo-banner p-3 d-flex flex-column flex-sm-row align-items-sm-center gap-2">
+    <div class="d-flex align-items-center gap-2 fw-semibold">
+      <i class="bi bi-palette2"></i> Maqueta visual
+    </div>
+    <div class="small opacity-75">
+      Los importes y tasas son datos de ejemplo para revisar el diseño. La app real no inventa cifras.
+    </div>
+    <span class="badge badge-warn rounded-pill ms-sm-auto">Bootstrap 5</span>
+  </div>
+
+  <div class="d-flex align-items-center gap-3 py-3">
+    <ul class="nav nav-pills gap-2 flex-nowrap overflow-auto pb-1" id="screenNav">
+      <li class="nav-item"><button class="nav-link active" type="button" data-screen="home"><i class="bi bi-house-door me-1"></i>Inicio</button></li>
+      <li class="nav-item"><button class="nav-link" type="button" data-screen="plan"><i class="bi bi-wallet2 me-1"></i>Plan</button></li>
+      <li class="nav-item"><button class="nav-link" type="button" data-screen="divisas"><i class="bi bi-currency-exchange me-1"></i>Divisas</button></li>
+      <li class="nav-item"><button class="nav-link" type="button" data-screen="ajustes"><i class="bi bi-sliders me-1"></i>Ajustes</button></li>
+    </ul>
+    <div class="ms-auto d-none d-md-flex align-items-center gap-2 text-app-muted small">
+      <i class="bi bi-shield-check text-app-teal"></i> Sin nube · sin datos de ejemplo en la app real
+    </div>
+  </div>
+</div>
+
+<main class="container-xxl pb-5">
+
+  <!-- ============================================================ INICIO -->
+  <section class="screen active" id="screen-home">
+    <div class="row g-4">
+      <div class="col-lg-7">
+        <div class="balance-card p-4 p-lg-5 mb-4">
+          <div class="d-flex justify-content-between align-items-start gap-3">
+            <div>
+              <div class="section-label text-white-50">Saldo consolidado</div>
+              <div class="money money-lg mt-1">Bs. 48.250,00</div>
+              <div class="eq-line mt-2"><span class="eq">≈ US$ 150,55</span></div>
+            </div>
+            <span class="badge rate-pill rounded-pill px-3 py-2">BCV</span>
+          </div>
+          <div class="d-flex flex-wrap gap-2 mt-4">
+            <span class="rate-pill rounded-pill px-3 py-1 money-xs">1 USD = 320,50 VES</span>
+            <span class="rate-pill rounded-pill px-3 py-1 money-xs"><i class="bi bi-arrow-repeat me-1"></i>Actualizado hoy</span>
+          </div>
+          <div class="row g-3 mt-4 pt-2 border-top border-light border-opacity-10">
+            <div class="col-6">
+              <div class="text-muted-soft small">Cuenta VES</div>
+              <div class="money money-sm">Bs. 48.250,00</div>
+            </div>
+            <div class="col-6">
+              <div class="text-muted-soft small">Cuenta USD</div>
+              <div class="money money-sm">US$ 0,00</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-soft mb-4">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+              <div>
+                <div class="section-label">Te queda este mes</div>
+                <div class="money money-md mt-1">Bs. 18.750,00</div>
+                <div class="eq-line mt-1"><span class="eq">≈ US$ 58,50</span></div>
+              </div>
+              <div class="text-end">
+                <div class="section-label">Gastado</div>
+                <div class="money money-sm mt-1">Bs. 11.250,00</div>
+                <div class="eq-line justify-content-end mt-1"><span class="eq">≈ US$ 35,10</span></div>
+              </div>
+            </div>
+            <div class="progress progress-soft mt-3" role="progressbar" aria-label="Presupuesto usado" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100">
+              <div class="progress-bar" style="width: 60%; background: linear-gradient(90deg, #0f766e, #28b3a6);"></div>
+            </div>
+            <div class="d-flex justify-content-between mt-2 small text-app-muted">
+              <span>Presupuesto: Bs. 30.000,00</span>
+              <span>60% usado</span>
+            </div>
+            <div class="small text-app-muted mt-2">
+              <i class="bi bi-arrow-repeat me-1"></i>Se recalcula con la tasa actual: 1 USD = 320,50 VES
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-soft">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <div class="section-label">Proyección al cierre</div>
+                <div class="money money-md mt-1">Bs. 36.400,00</div>
+                <div class="eq-line mt-1"><span class="eq">≈ US$ 113,57</span></div>
+              </div>
+              <span class="icon-bubble gold"><i class="bi bi-graph-up-arrow"></i></span>
+            </div>
+            <div class="small text-app-muted mt-2">Estimado con tu ritmo de gasto actual. No es una promesa.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-5">
+        <div class="card card-soft mb-4">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div class="section-label mb-0">Tasa de hoy</div>
+              <button class="btn btn-ghost btn-sm" type="button" id="refreshRates">
+                <i class="bi bi-arrow-repeat me-1"></i>Actualizar
+              </button>
+            </div>
+            <div class="d-flex align-items-end gap-2">
+              <div class="money money-md">Bs. 320,50</div>
+              <div class="small text-app-muted pb-1">por 1 USD</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-3">
+              <span class="badge badge-soft rounded-pill">BCV oficial</span>
+              <span class="badge badge-soft rounded-pill">Paralelo: 335,80</span>
+              <span class="badge badge-soft rounded-pill">USDT: 336,10</span>
+            </div>
+            <div class="small text-app-muted mt-3">
+              Si falta una tasa, la app muestra <strong>“sin cotización”</strong> y permite fijarla a mano.
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-soft mb-4">
+          <div class="card-body">
+            <div class="section-label mb-3">Acciones rápidas</div>
+            <div class="d-grid gap-2">
+              <button class="quick-action" type="button" data-bs-toggle="modal" data-bs-target="#txnModal">
+                <span class="icon-bubble"><i class="bi bi-plus-lg"></i></span>
+                <span><span class="d-block fw-semibold">Registrar gasto</span><span class="small text-app-muted">importe, divisa y categoría</span></span>
+                <i class="bi bi-chevron-right ms-auto text-app-muted"></i>
+              </button>
+              <button class="quick-action" type="button" data-screen="plan">
+                <span class="icon-bubble gold"><i class="bi bi-wallet2"></i></span>
+                <span><span class="d-block fw-semibold">Revisar sobres</span><span class="small text-app-muted">límites y equivalencias</span></span>
+                <i class="bi bi-chevron-right ms-auto text-app-muted"></i>
+              </button>
+              <button class="quick-action" type="button" data-screen="divisas">
+                <span class="icon-bubble"><i class="bi bi-currency-exchange"></i></span>
+                <span><span class="d-block fw-semibold">Cambiar la tasa</span><span class="small text-app-muted">BCV, paralelo o manual</span></span>
+                <i class="bi bi-chevron-right ms-auto text-app-muted"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-soft">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="section-label mb-0">Últimos movimientos</div>
+              <button class="btn btn-link btn-sm text-app-teal text-decoration-none p-0" type="button" data-screen="plan">Ver plan</button>
+            </div>
+            <div class="txn-row">
+              <span class="icon-bubble"><i class="bi bi-basket2"></i></span>
+              <div class="flex-grow-1">
+                <div class="fw-semibold">Mercado</div>
+                <div class="txn-meta">Hoy · VES · gasto</div>
+              </div>
+              <div class="money money-sm text-app-danger">− Bs. 4.200,00</div>
+            </div>
+            <div class="txn-row">
+              <span class="icon-bubble"><i class="bi bi-play-circle"></i></span>
+              <div class="flex-grow-1">
+                <div class="fw-semibold">Suscripción</div>
+                <div class="txn-meta">Ayer · USD · gasto</div>
+              </div>
+              <div class="money money-sm text-app-danger">− US$ 12,99</div>
+            </div>
+            <div class="txn-row">
+              <span class="icon-bubble"><i class="bi bi-arrow-down-left"></i></span>
+              <div class="flex-grow-1">
+                <div class="fw-semibold">Pago cliente</div>
+                <div class="txn-meta">28 oct · VES · ingreso</div>
+              </div>
+              <div class="money money-sm text-app-teal">+ Bs. 8.000,00</div>
+            </div>
+            <div class="txn-row">
+              <span class="icon-bubble"><i class="bi bi-bus-front"></i></span>
+              <div class="flex-grow-1">
+                <div class="fw-semibold">Transporte</div>
+                <div class="txn-meta">27 oct · VES · gasto</div>
+              </div>
+              <div class="money money-sm text-app-danger">− Bs. 1.500,00</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ PLAN -->
+  <section class="screen" id="screen-plan">
+    <div class="row g-4">
+      <div class="col-lg-7">
+        <div class="card card-soft mb-4">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+              <div>
+                <div class="section-label">Te queda este mes</div>
+                <div class="money money-md mt-1">Bs. 18.750,00</div>
+                <div class="eq-line mt-1"><span class="eq">≈ US$ 58,50</span></div>
+              </div>
+              <div class="text-end">
+                <div class="section-label">Gastado</div>
+                <div class="money money-sm mt-1">Bs. 11.250,00</div>
+                <div class="eq-line justify-content-end mt-1"><span class="eq">≈ US$ 35,10</span></div>
+              </div>
+            </div>
+            <hr class="my-3 opacity-25">
+            <div class="row g-3 small">
+              <div class="col-sm-6">
+                <div class="text-app-muted">Presupuesto</div>
+                <div class="money money-sm">Bs. 30.000,00</div>
+              </div>
+              <div class="col-sm-6">
+                <div class="text-app-muted">Tasa aplicada</div>
+                <div class="money money-sm">1 USD = 320,50 VES</div>
+              </div>
+            </div>
+            <div class="small text-app-muted mt-3">
+              <i class="bi bi-arrow-repeat me-1"></i>Las equivalencias se recalculan cada vez que cambia la tasa.
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <div class="section-label">Sobres</div>
+            <h2 class="h5 mb-0 mt-1">Límites por categoría</h2>
+          </div>
+          <button class="btn btn-app btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#envelopeModal">
+            <i class="bi bi-plus-lg me-1"></i>Nuevo sobre
+          </button>
+        </div>
+
+        <div class="d-grid gap-3">
+          <div class="envelope-card">
+            <div class="d-flex align-items-center gap-3">
+              <span class="icon-bubble"><i class="bi bi-basket2"></i></span>
+              <div class="flex-grow-1">
+                <div class="d-flex justify-content-between gap-2">
+                  <div class="fw-semibold">Comida</div>
+                  <div class="text-end">
+                    <div class="money money-sm">Bs. 3.800,00</div>
+                    <div class="eq-line justify-content-end"><span class="eq">≈ US$ 11,86</span></div>
+                  </div>
+                </div>
+                <div class="progress progress-soft mt-2"><div class="progress-bar" style="width: 52.5%; background: linear-gradient(90deg,#0f766e,#28b3a6);"></div></div>
+                <div class="d-flex justify-content-between small text-app-muted mt-1">
+                  <span>Bs. 4.200,00 de Bs. 8.000,00</span><span>52%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="envelope-card is-over">
+            <div class="d-flex align-items-center gap-3">
+              <span class="icon-bubble danger"><i class="bi bi-bus-front"></i></span>
+              <div class="flex-grow-1">
+                <div class="d-flex justify-content-between gap-2">
+                  <div class="fw-semibold">Transporte</div>
+                  <div class="text-end">
+                    <div class="money money-sm text-app-danger">− Bs. 450,00</div>
+                    <div class="eq-line justify-content-end"><span class="eq">≈ − US$ 1,40</span></div>
+                  </div>
+                </div>
+                <div class="progress progress-soft mt-2"><div class="progress-bar" style="width: 100%; background: #c2414b;"></div></div>
+                <div class="d-flex justify-content-between small text-app-muted mt-1">
+                  <span>Bs. 3.450,00 de Bs. 3.000,00</span><span class="text-app-danger">Excedido</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="envelope-card">
+            <div class="d-flex align-items-center gap-3">
+              <span class="icon-bubble gold"><i class="bi bi-house-door"></i></span>
+              <div class="flex-grow-1">
+                <div class="d-flex justify-content-between gap-2">
+                  <div class="fw-semibold">Hogar</div>
+                  <div class="text-end">
+                    <div class="money money-sm">Bs. 9.400,00</div>
+                    <div class="eq-line justify-content-end"><span class="eq">≈ US$ 29,33</span></div>
+                  </div>
+                </div>
+                <div class="progress progress-soft mt-2"><div class="progress-bar" style="width: 21.25%; background: linear-gradient(90deg,#d99a2b,#f0bd59);"></div></div>
+                <div class="d-flex justify-content-between small text-app-muted mt-1">
+                  <span>Bs. 2.550,00 de Bs. 12.000,00</span><span>21%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="envelope-card">
+            <div class="d-flex align-items-center gap-3">
+              <span class="icon-bubble"><i class="bi bi-heart-pulse"></i></span>
+              <div class="flex-grow-1">
+                <div class="d-flex justify-content-between gap-2">
+                  <div class="fw-semibold">Salud</div>
+                  <div class="text-end">
+                    <div class="money money-sm">Bs. 1.050,00</div>
+                    <div class="eq-line justify-content-end"><span class="eq">≈ US$ 3,28</span></div>
+                  </div>
+                </div>
+                <div class="progress progress-soft mt-2"><div class="progress-bar" style="width: 82.5%; background: #d99a2b;"></div></div>
+                <div class="d-flex justify-content-between small text-app-muted mt-1">
+                  <span>Bs. 4.950,00 de Bs. 6.000,00</span><span class="text-app-gold">Cerca del límite</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-5">
+        <div class="card card-soft mb-4">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div class="section-label mb-0">Pagos próximos</div>
+              <button class="btn btn-ghost btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#paymentModal"><i class="bi bi-plus-lg me-1"></i>Añadir</button>
+            </div>
+            <div class="txn-row">
+              <span class="icon-bubble gold"><i class="bi bi-house-door"></i></span>
+              <div class="flex-grow-1">
+                <div class="fw-semibold">Alquiler</div>
+                <div class="txn-meta">Vence hoy · mensual</div>
+              </div>
+              <div class="text-end">
+                <div class="money money-sm">Bs. 5.000,00</div>
+                <button class="btn btn-link btn-sm p-0 text-app-teal text-decoration-none" type="button" data-demo-action="Marcar como pagado">Marcar pagado</button>
+              </div>
+            </div>
+            <div class="txn-row">
+              <span class="icon-bubble"><i class="bi bi-wifi"></i></span>
+              <div class="flex-grow-1">
+                <div class="fw-semibold">Internet</div>
+                <div class="txn-meta">En 3 días · mensual</div>
+              </div>
+              <div class="money money-sm">Bs. 1.200,00</div>
+            </div>
+            <div class="txn-row">
+              <span class="icon-bubble"><i class="bi bi-play-circle"></i></span>
+              <div class="flex-grow-1">
+                <div class="fw-semibold">Suscripción</div>
+                <div class="txn-meta">En 6 días · mensual</div>
+              </div>
+              <div class="money money-sm">Bs. 4.160,00</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-soft">
+          <div class="card-body">
+            <div class="section-label mb-2">Cómo se calcula</div>
+            <p class="small text-app-muted mb-2">
+              Cada gasto se descuenta de su sobre aunque se haya registrado en otra divisa.
+              Se usa la tasa guardada al registrar y, si no existe, la cotización actual.
+            </p>
+            <div class="d-flex gap-2 flex-wrap">
+              <span class="badge badge-soft rounded-pill">Tasa histórica</span>
+              <span class="badge badge-soft rounded-pill">Tasa actual</span>
+              <span class="badge badge-warn rounded-pill">Sin cotización no inventa</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ DIVISAS -->
+  <section class="screen" id="screen-divisas">
+    <div class="row g-4">
+      <div class="col-lg-8">
+        <div class="card card-soft mb-4">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div>
+                <div class="section-label">Referencias del bolívar</div>
+                <h2 class="h5 mb-0 mt-1">1 USD en VES</h2>
+              </div>
+              <button class="btn btn-app btn-sm" type="button" id="refreshRates2">
+                <i class="bi bi-arrow-repeat me-1"></i>Actualizar
+              </button>
+            </div>
+            <div class="row g-3">
+              <div class="col-sm-4">
+                <div class="rate-card">
+                  <div class="d-flex justify-content-between"><span class="small fw-semibold">BCV oficial</span><span class="badge badge-soft rounded-pill">Activa</span></div>
+                  <div class="rate-value money mt-2">320,50</div>
+                  <div class="rate-source"><i class="bi bi-clock"></i>hoy · fuente BCV</div>
+                </div>
+              </div>
+              <div class="col-sm-4">
+                <div class="rate-card">
+                  <div class="small fw-semibold">Paralelo</div>
+                  <div class="rate-value money mt-2">335,80</div>
+                  <div class="rate-source"><i class="bi bi-clock"></i>hoy · mercado P2P</div>
+                </div>
+              </div>
+              <div class="col-sm-4">
+                <div class="rate-card">
+                  <div class="small fw-semibold">USDT</div>
+                  <div class="rate-value money mt-2">336,10</div>
+                  <div class="rate-source"><i class="bi bi-info-circle"></i>proxi del paralelo</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-soft mb-4">
+          <div class="card-body">
+            <div class="section-label mb-3">Otras referencias</div>
+            <div class="row g-3">
+              <div class="col-sm-6">
+                <div class="rate-card d-flex align-items-center gap-3">
+                  <span class="icon-bubble"><i class="bi bi-currency-euro"></i></span>
+                  <div class="flex-grow-1">
+                    <div class="small fw-semibold">Euro</div>
+                    <div class="rate-value money">0,92</div>
+                  </div>
+                  <span class="badge badge-soft rounded-pill">BCE</span>
+                </div>
+              </div>
+              <div class="col-sm-6">
+                <div class="rate-card d-flex align-items-center gap-3">
+                  <span class="icon-bubble"><i class="bi bi-cash-stack"></i></span>
+                  <div class="flex-grow-1">
+                    <div class="small fw-semibold">Peso argentino</div>
+                    <div class="rate-value money">1.050,00</div>
+                  </div>
+                  <span class="badge badge-soft rounded-pill">Oficial</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-soft">
+          <div class="card-body">
+            <div class="section-label mb-3">Catálogo</div>
+            <div class="table-responsive">
+              <table class="table align-middle mb-0">
+                <thead class="small text-app-muted">
+                  <tr><th>Divisa</th><th>País</th><th class="text-end">USD</th><th class="text-end">EUR</th><th></th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="fw-semibold">USD</span><div class="small text-app-muted">Dólar</div></td>
+                    <td class="small">Estados Unidos</td>
+                    <td class="text-end money money-sm">1,00</td>
+                    <td class="text-end money money-sm">0,92</td>
+                    <td><span class="badge badge-soft rounded-pill">base</span></td>
+                  </tr>
+                  <tr>
+                    <td><span class="fw-semibold">VES</span><div class="small text-app-muted">Bolívar</div></td>
+                    <td class="small">Venezuela</td>
+                    <td class="text-end money money-sm">320,50</td>
+                    <td class="text-end money money-sm">294,86</td>
+                    <td><span class="badge badge-soft rounded-pill">BCV</span></td>
+                  </tr>
+                  <tr>
+                    <td><span class="fw-semibold">EUR</span><div class="small text-app-muted">Euro</div></td>
+                    <td class="small">Zona euro</td>
+                    <td class="text-end money money-sm">1,09</td>
+                    <td class="text-end money money-sm">1,00</td>
+                    <td><span class="badge badge-soft rounded-pill">BCE</span></td>
+                  </tr>
+                  <tr>
+                    <td><span class="fw-semibold">ARS</span><div class="small text-app-muted">Peso argentino</div></td>
+                    <td class="small">Argentina</td>
+                    <td class="text-end money money-sm">0,000952</td>
+                    <td class="text-end money money-sm">0,000876</td>
+                    <td><span class="badge badge-soft rounded-pill">Oficial</span></td>
+                  </tr>
+                  <tr>
+                    <td><span class="fw-semibold">JPY</span><div class="small text-app-muted">Yen</div></td>
+                    <td class="small">Japón</td>
+                    <td class="text-end money money-sm text-app-muted">—</td>
+                    <td class="text-end money money-sm text-app-muted">—</td>
+                    <td><span class="badge badge-warn rounded-pill">Sin cotización</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="small text-app-muted mt-3">La tabla es una muestra visual. En la app, si no hay fuente, se puede fijar una tasa manual.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-4">
+        <div class="card card-soft mb-4">
+          <div class="card-body">
+            <div class="section-label mb-3">Fijar tasa manual</div>
+            <form data-demo-form data-demo-message="Tasa manual guardada (demo).">
+              <div class="mb-3">
+                <label class="form-label small fw-semibold" for="manualCurrency">Divisa</label>
+                <select class="form-select" id="manualCurrency">
+                  <option>VES · BCV</option>
+                  <option>VES · Paralelo</option>
+                  <option>VES · USDT</option>
+                  <option>EUR</option>
+                  <option>ARS</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label small fw-semibold" for="manualRate">Unidades por 1 USD</label>
+                <input class="form-control money" id="manualRate" type="number" min="0" step="0.0001" value="320.50">
+              </div>
+              <button class="btn btn-app w-100" type="submit"><i class="bi bi-pin-angle me-1"></i>Guardar tasa</button>
+            </form>
+            <div class="small text-app-muted mt-3">La tasa manual siempre gana sobre la de internet. Se puede quitar en cualquier momento.</div>
+          </div>
+        </div>
+
+        <div class="card card-soft mb-4">
+          <div class="card-body">
+            <div class="section-label mb-2">Equivalencia del presupuesto</div>
+            <div class="money money-md">Bs. 18.750,00</div>
+            <div class="eq-line mt-1"><span class="eq">≈ US$ 58,50</span></div>
+            <div class="small text-app-muted mt-2">Se actualiza sola cada vez que cambia la referencia activa.</div>
+          </div>
+        </div>
+
+        <div class="card card-soft">
+          <div class="card-body">
+            <div class="section-label mb-2">Honestidad de datos</div>
+            <ul class="small text-app-muted mb-0 ps-3">
+              <li>Sin tasas aproximadas ni tablas fijas.</li>
+              <li>La caché conserva la última referencia real.</li>
+              <li>Si no hay dato: “sin cotización”.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ AJUSTES -->
+  <section class="screen" id="screen-ajustes">
+    <div class="row g-4">
+      <div class="col-lg-7">
+        <div class="creator-card p-4 mb-4">
+          <div class="d-flex align-items-center gap-3">
+            <span class="brand-mark" style="width:3.5rem;height:3.5rem;border-radius:1.25rem;font-size:1.35rem;">F</span>
+            <div>
+              <div class="section-label">Creador</div>
+              <div class="h5 mb-0">Esdras Millan</div>
+              <div class="small text-app-muted">Finanzas · versión 0.5.0</div>
+            </div>
+            <span class="badge badge-soft rounded-pill ms-auto">Hecho local</span>
+          </div>
+        </div>
+
+        <div class="card card-soft mb-4">
+          <div class="card-body">
+            <div class="section-label mb-3">Apariencia</div>
+            <div class="d-flex align-items-center justify-content-between gap-3">
+              <div>
+                <div class="fw-semibold">Tema</div>
+                <div class="small text-app-muted">Claro, oscuro o el del sistema.</div>
+              </div>
+              <div class="d-flex gap-2">
+                <button class="theme-swatch" type="button" style="background:#f3f6f7" data-theme-set="light" aria-label="Tema claro"></button>
+                <button class="theme-swatch" type="button" style="background:#101a20" data-theme-set="dark" aria-label="Tema oscuro"></button>
+                <button class="theme-swatch" type="button" style="background:linear-gradient(135deg,#0f766e,#d99a2b)" data-theme-set="teal" aria-label="Tema océano"></button>
+              </div>
+            </div>
+            <hr class="my-3 opacity-25">
+            <div class="d-flex align-items-center justify-content-between">
+              <div>
+                <div class="fw-semibold">Recordatorios</div>
+                <div class="small text-app-muted">Aviso diario de vencimientos a las 9:00.</div>
+              </div>
+              <div class="form-check form-switch m-0">
+                <input class="form-check-input" type="checkbox" role="switch" checked>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-soft">
+          <div class="card-body">
+            <div class="section-label mb-3">Divisas</div>
+            <div class="row g-3">
+              <div class="col-sm-6">
+                <label class="form-label small fw-semibold" for="baseCurrency">Base</label>
+                <select class="form-select" id="baseCurrency">
+                  <option selected>VES · Bolívar</option>
+                  <option>USD · Dólar</option>
+                  <option>EUR · Euro</option>
+                  <option>ARS · Peso argentino</option>
+                </select>
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label small fw-semibold" for="secondaryCurrency">Secundaria</label>
+                <select class="form-select" id="secondaryCurrency">
+                  <option>VES · Bolívar</option>
+                  <option selected>USD · Dólar</option>
+                  <option>EUR · Euro</option>
+                  <option>ARS · Peso argentino</option>
+                </select>
+              </div>
+            </div>
+            <div class="small text-app-muted mt-3">La base y la secundaria se recuerdan entre arranques.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-5">
+        <div class="card card-soft mb-4">
+          <div class="card-body">
+            <div class="section-label mb-3">Seguridad local</div>
+            <div class="d-flex align-items-center gap-3">
+              <span class="icon-bubble"><i class="bi bi-shield-lock"></i></span>
+              <div>
+                <div class="fw-semibold">Contraseña PBKDF2</div>
+                <div class="small text-app-muted">Todo se queda en este dispositivo.</div>
+              </div>
+            </div>
+            <div class="small text-app-muted mt-3">No hay bloqueo biométrico ni recuperación por correo. Si se olvida la contraseña, se pierde el acceso al perfil.</div>
+          </div>
+        </div>
+
+        <div class="card card-soft mb-4">
+          <div class="card-body">
+            <div class="section-label mb-3">Datos</div>
+            <div class="d-grid gap-2">
+              <button class="quick-action" type="button" data-demo-action="Exportación CSV preparada (demo).">
+                <span class="icon-bubble"><i class="bi bi-filetype-csv"></i></span>
+                <span><span class="d-block fw-semibold">Exportar movimientos</span><span class="small text-app-muted">CSV por el selector del sistema</span></span>
+                <i class="bi bi-chevron-right ms-auto text-app-muted"></i>
+              </button>
+              <button class="quick-action" type="button" data-demo-action="Confirmación de borrado (demo).">
+                <span class="icon-bubble danger"><i class="bi bi-trash3"></i></span>
+                <span><span class="d-block fw-semibold">Borrar todos los movimientos</span><span class="small text-app-muted">Los sobres y pagos se conservan</span></span>
+                <i class="bi bi-chevron-right ms-auto text-app-muted"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-soft">
+          <div class="card-body">
+            <div class="section-label mb-2">Acerca de</div>
+            <p class="small text-app-muted mb-1">Finanzas · 0.5.0 · versionCode 4</p>
+            <p class="small text-app-muted mb-0">Diseñado y desarrollado por <strong>Esdras Millan</strong>.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="container-xxl pb-5">
+  <div class="d-flex flex-column flex-sm-row justify-content-between gap-2 small text-app-muted border-top pt-3" style="border-color: var(--app-line) !important;">
+    <span>Finanzas · prototipo visual en Bootstrap 5</span>
+    <span>Hecho por <strong>Esdras Millan</strong></span>
+  </div>
+</footer>
+
+<!-- ============================================================ MODAL REGISTRAR -->
+<div class="modal fade" id="txnModal" tabindex="-1" aria-labelledby="txnModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <div class="section-label">Registrar</div>
+          <h2 class="modal-title h5 mb-0" id="txnModalLabel">Nuevo movimiento</h2>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form data-demo-form data-demo-message="Movimiento guardado (demo).">
+        <div class="modal-body">
+          <div class="d-flex gap-2 mb-3">
+            <button class="btn btn-app btn-sm flex-fill" type="button">Gasto</button>
+            <button class="btn btn-ghost btn-sm flex-fill" type="button">Ingreso</button>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="txnAmount">Importe</label>
+            <input class="form-control money form-control-lg" id="txnAmount" type="text" inputmode="decimal" placeholder="0,00" required>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label small fw-semibold" for="txnCurrency">Divisa</label>
+              <select class="form-select" id="txnCurrency"><option selected>VES</option><option>USD</option><option>EUR</option></select>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold" for="txnCategory">Categoría</label>
+              <select class="form-select" id="txnCategory"><option selected>Comida</option><option>Transporte</option><option>Hogar</option><option>Salud</option></select>
+            </div>
+          </div>
+          <div>
+            <label class="form-label small fw-semibold" for="txnMerchant">Comercio o nota</label>
+            <input class="form-control" id="txnMerchant" type="text" placeholder="Mercado, farmacia…">
+          </div>
+          <div class="small text-app-muted mt-3">
+            <i class="bi bi-camera me-1"></i>La app real también permite escanear una factura con OCR en el dispositivo.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-app">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ MODAL SOBRE -->
+<div class="modal fade" id="envelopeModal" tabindex="-1" aria-labelledby="envelopeModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <div class="section-label">Plan</div>
+          <h2 class="modal-title h5 mb-0" id="envelopeModalLabel">Nuevo sobre</h2>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form data-demo-form data-demo-message="Sobre creado (demo).">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="envName">Categoría</label>
+            <input class="form-control" id="envName" type="text" placeholder="Ej. Comida" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="envLimit">Límite mensual</label>
+            <input class="form-control money" id="envLimit" type="text" inputmode="decimal" placeholder="0,00" required>
+          </div>
+          <div class="small text-app-muted">El límite se expresa en la divisa base. Cada gasto de la categoría se descuenta automáticamente.</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-app">Crear sobre</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ MODAL PAGO -->
+<div class="modal fade" id="paymentModal" tabindex="-1" aria-labelledby="paymentModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <div class="section-label">Plan</div>
+          <h2 class="modal-title h5 mb-0" id="paymentModalLabel">Nuevo pago</h2>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form data-demo-form data-demo-message="Pago programado (demo).">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="payName">Nombre</label>
+            <input class="form-control" id="payName" type="text" placeholder="Alquiler, luz…" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="payAmount">Importe</label>
+            <input class="form-control money" id="payAmount" type="text" inputmode="decimal" placeholder="0,00" required>
+          </div>
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label small fw-semibold" for="payDate">Vence</label>
+              <input class="form-control" id="payDate" type="date">
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold" for="payRecurrence">Recurrencia</label>
+              <select class="form-select" id="payRecurrence"><option selected>Mensual</option><option>Único</option></select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-app">Añadir</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="appToast" class="toast align-items-center border-0" role="status" aria-live="polite" aria-atomic="true">
+    <div class="d-flex">
+      <div class="toast-body" id="appToastBody">Listo.</div>
+      <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Cerrar"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

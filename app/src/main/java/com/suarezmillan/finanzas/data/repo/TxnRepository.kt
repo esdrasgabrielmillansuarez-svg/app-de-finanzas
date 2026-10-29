@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.Flow
 data class MonthSummary(
     val spentMinor: Long,
     val incomeMinor: Long,
+    /** Gastos que no se pudieron convertir por falta de cotización. */
+    val missingRateExpenses: Int = 0,
 )
 
 interface TxnRepository {

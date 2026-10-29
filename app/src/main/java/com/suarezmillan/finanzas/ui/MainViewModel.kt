@@ -46,6 +46,12 @@ import java.time.YearMonth
 import java.time.ZoneId
 import javax.inject.Inject
 
+/** Equivalencia de un importe en las dos divisas de referencia del producto. */
+data class AmountEquivalence(
+    val usdMinor: Long? = null,
+    val vesMinor: Long? = null,
+)
+
 data class HomeUiState(
     val baseCurrency: String = "VES",
     val secondaryCurrency: String = "USD",
@@ -60,12 +66,22 @@ data class HomeUiState(
     val envelopes: List<EnvelopeProgress> = emptyList(),
     val categories: List<CategoryEntity> = emptyList(),
     val recent: List<TxnEntity> = emptyList(),
+    /** Gastos del mes que no se pudieron convertir porque falta una tasa. */
+    val missingRateExpenses: Int = 0,
+    /** 1 USD expresado en VES con la referencia activa; `null` si no hay tasa. */
+    val usdToVesRate: Double? = null,
+    val remainingEquivalent: AmountEquivalence = AmountEquivalence(),
+    val spentEquivalent: AmountEquivalence = AmountEquivalence(),
+    val budgetEquivalent: AmountEquivalence = AmountEquivalence(),
+    val envelopeEquivalents: Map<String, AmountEquivalence> = emptyMap(),
 ) {
-    /** "Te queda este mes": lo que resta en cada sobre de la divisa base. */
+    /**
+     * "Te queda este mes": presupuesto total menos todos los gastos del mes.
+     * Los gastos en otras divisas se convierten a [baseCurrency]; si falta la
+     * tasa, [missingRateExpenses] lo avisa y ese gasto no se resta.
+     */
     val remainingMinor: Long
-        get() = envelopes
-            .filter { it.currency == baseCurrency }
-            .sumOf { it.remainingMinor }
+        get() = budgetLimitMinor - spentMinor
 
     val usedRatio: Float
         get() = if (budgetLimitMinor <= 0L) 0f
@@ -191,9 +207,11 @@ class MainViewModel @Inject constructor(
         snapshot,
         txnRepository.observeRecent(20),
     ) { snap, recent ->
-        val limit = snap.envelopes.filter { it.currency == snap.context.base }.sumOf { it.limitMinor }
+        val base = snap.context.base
+        val limit = snap.envelopes.filter { it.currency == base }.sumOf { it.limitMinor }
+        val remaining = limit - snap.summary.spentMinor
         HomeUiState(
-            baseCurrency = snap.context.base,
+            baseCurrency = base,
             secondaryCurrency = snap.context.secondary,
             rate = snap.context.rate,
             rateIsManual = snap.context.manual,
@@ -206,6 +224,14 @@ class MainViewModel @Inject constructor(
             envelopes = snap.envelopes,
             categories = snap.categories,
             recent = recent,
+            missingRateExpenses = snap.summary.missingRateExpenses,
+            usdToVesRate = rates.rate(CurrencyRates.USD, CurrencyRates.VES),
+            remainingEquivalent = equivalence(remaining, base),
+            spentEquivalent = equivalence(snap.summary.spentMinor, base),
+            budgetEquivalent = equivalence(limit, base),
+            envelopeEquivalents = snap.envelopes.associate { envelope ->
+                envelope.categoryId to equivalence(envelope.remainingMinor, envelope.currency)
+            },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
@@ -220,6 +246,13 @@ class MainViewModel @Inject constructor(
         val projectedSpend = burnPerDay * daysInMonth
         return snap.balanceMinor - (projectedSpend - snap.summary.spentMinor)
     }
+
+    /** Equivalencia actual; cada valor es `null` si falta la tasa correspondiente. */
+    private fun equivalence(minor: Long, from: String): AmountEquivalence =
+        AmountEquivalence(
+            usdMinor = rates.convert(minor, from, CurrencyRates.USD),
+            vesMinor = rates.convert(minor, from, CurrencyRates.VES),
+        )
 
     // ------------------------------------------------------------------ movimientos
 
@@ -275,10 +308,22 @@ class MainViewModel @Inject constructor(
     /** Repite un movimiento con la fecha de hoy (mismo importe, categoría y divisa). */
     fun duplicateTxn(txn: TxnEntity) {
         viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val base = settings.baseCurrency.value
+            val isBase = txn.currency.equals(base, ignoreCase = true)
+            val fx = if (isBase) null else rates.rate(txn.currency, base)
             val copy = txn.copy(
                 id = java.util.UUID.randomUUID().toString(),
-                occurredAt = System.currentTimeMillis(),
-                createdAt = System.currentTimeMillis(),
+                occurredAt = now,
+                createdAt = now,
+                fxRateToBase = fx,
+                fxBaseCurrency = base,
+                fxSource = when {
+                    isBase || fx == null -> FxSource.NONE
+                    settings.isManual(txn.currency) || settings.isManual(base) -> FxSource.MANUAL
+                    else -> FxSource.AUTO
+                },
+                fxTimestamp = if (isBase || fx == null) null else now,
                 transferGroupId = null,
             )
             publishSaved(copy)
@@ -330,6 +375,7 @@ class MainViewModel @Inject constructor(
             merchant = merchant,
             occurredAt = System.currentTimeMillis(),
             fxRateToBase = fx,
+            fxBaseCurrency = base,
             fxSource = when {
                 isBase || fx == null -> FxSource.NONE
                 settings.isManual(currency) || settings.isManual(base) -> FxSource.MANUAL

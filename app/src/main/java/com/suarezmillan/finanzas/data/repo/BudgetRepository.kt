@@ -1,9 +1,14 @@
 package com.suarezmillan.finanzas.data.repo
 
+import com.suarezmillan.finanzas.core.currency.CurrencyRates
+import com.suarezmillan.finanzas.core.settings.AppSettings
 import com.suarezmillan.finanzas.data.local.dao.EnvelopeDao
+import com.suarezmillan.finanzas.data.local.dao.TxnDao
 import com.suarezmillan.finanzas.data.local.entity.EnvelopeEntity
+import com.suarezmillan.finanzas.data.local.entity.TxnType
 import com.suarezmillan.finanzas.data.local.model.EnvelopeProgress
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import java.time.YearMonth
 import java.time.ZoneId
 import javax.inject.Inject
@@ -29,6 +34,9 @@ interface BudgetRepository {
 
 class BudgetRepositoryImpl @Inject constructor(
     private val envelopeDao: EnvelopeDao,
+    private val txnDao: TxnDao,
+    private val rates: CurrencyRates,
+    private val settings: AppSettings,
 ) : BudgetRepository {
 
     override fun observeEnvelopes(monthKey: String): Flow<List<EnvelopeProgress>> {
@@ -36,7 +44,30 @@ class BudgetRepositoryImpl @Inject constructor(
         val zone = ZoneId.systemDefault()
         val from = month.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
         val to = month.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        return envelopeDao.observeProgress(monthKey, from, to)
+
+        return combine(
+            envelopeDao.observeDefinitions(monthKey),
+            txnDao.observeByTypeBetween(TxnType.EXPENSE.name, from, to),
+            settings.ratesRevision,
+        ) { definitions, expenses, _ ->
+            val byCategory = expenses
+                .filter { it.categoryId != null }
+                .groupBy { it.categoryId!! }
+
+            definitions.map { envelope ->
+                val spent = byCategory[envelope.categoryId]
+                    .orEmpty()
+                    .sumOf { txn -> txn.absoluteAmountIn(envelope.currency, rates) ?: 0L }
+                EnvelopeProgress(
+                    categoryId = envelope.categoryId,
+                    name = envelope.name,
+                    emoji = envelope.emoji,
+                    currency = envelope.currency,
+                    limitMinor = envelope.limitMinor,
+                    spentMinor = spent,
+                )
+            }
+        }
     }
 
     override suspend fun upsert(envelope: EnvelopeEntity) = envelopeDao.upsert(envelope)

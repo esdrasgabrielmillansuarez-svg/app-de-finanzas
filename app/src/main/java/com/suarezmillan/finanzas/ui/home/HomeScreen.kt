@@ -28,8 +28,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.suarezmillan.finanzas.core.coach.CoachAction
 import com.suarezmillan.finanzas.core.coach.CoachMessage
+import com.suarezmillan.finanzas.core.money.MoneyFormat
 import com.suarezmillan.finanzas.data.local.entity.TxnEntity
 import com.suarezmillan.finanzas.ui.HomeUiState
+import com.suarezmillan.finanzas.ui.components.EquivalenceText
+import com.suarezmillan.finanzas.ui.components.EquivalentRateNote
 import com.suarezmillan.finanzas.ui.components.MoneyText
 import com.suarezmillan.finanzas.ui.theme.currencyAccent
 import java.time.format.DateTimeFormatter
@@ -131,7 +134,7 @@ fun HomeScreen(
             }
         }
 
-        // 2. Te queda este mes
+        // 2. Te queda este mes (presupuesto menos gasto real del mes)
         item {
             Card(
                 onClick = onOpenPlan,
@@ -140,18 +143,31 @@ fun HomeScreen(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Column {
-                            Text("Te queda este mes", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Te queda este mes",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                             if (state.budgetLimitMinor > 0L) {
                                 MoneyText(
                                     minor = state.remainingMinor,
                                     currency = state.baseCurrency,
+                                    signed = state.remainingMinor < 0L,
                                     style = MaterialTheme.typography.headlineSmall,
+                                )
+                                EquivalenceText(
+                                    equivalence = state.remainingEquivalent,
+                                    baseCurrency = state.baseCurrency,
                                 )
                             } else {
                                 Text(
-                                    "Sin sobres todavía",
+                                    "Sin presupuesto todavía",
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -160,9 +176,18 @@ fun HomeScreen(
                         if (state.budgetLimitMinor > 0L) {
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
-                                    "de ${com.suarezmillan.finanzas.core.money.MoneyFormat.format(state.budgetLimitMinor, state.baseCurrency)}",
+                                    "gastado",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                MoneyText(
+                                    minor = state.spentMinor,
+                                    currency = state.baseCurrency,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                                EquivalenceText(
+                                    equivalence = state.spentEquivalent,
+                                    baseCurrency = state.baseCurrency,
                                 )
                             }
                         }
@@ -173,6 +198,24 @@ fun HomeScreen(
                             progress = { state.usedRatio },
                             modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
                         )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Presupuesto: ${MoneyFormat.format(state.budgetLimitMinor, state.baseCurrency)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        EquivalentRateNote(
+                            usdToVesRate = state.usdToVesRate,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                        if (state.missingRateExpenses > 0) {
+                            Text(
+                                "${state.missingRateExpenses} gasto(s) del mes sin cotización no se sumaron.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                        }
                     } else {
                         Text(
                             "Toca la tarjeta para asignar un límite por categoría.",

@@ -5,7 +5,7 @@ import androidx.room.Delete
 import androidx.room.Query
 import androidx.room.Upsert
 import com.suarezmillan.finanzas.data.local.entity.EnvelopeEntity
-import com.suarezmillan.finanzas.data.local.model.EnvelopeProgress
+import com.suarezmillan.finanzas.data.local.model.EnvelopeDefinition
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -15,8 +15,9 @@ interface EnvelopeDao {
     fun observeByMonth(monthKey: String): Flow<List<EnvelopeEntity>>
 
     /**
-     * Límite vs. gastado real por sobre. El gasto se filtra por la divisa del
-     * sobre: nunca se suman monedas distintas en una misma barra.
+     * Sobres del mes con su categoría. El gasto se calcula en el repositorio
+     * porque hay que convertir movimientos de otras divisas usando su tasa
+     * histórica o, si falta, la cotización actual.
      */
     @Query(
         """
@@ -24,26 +25,14 @@ interface EnvelopeDao {
                c.name AS name,
                c.emoji AS emoji,
                e.currency AS currency,
-               e.limitMinor AS limitMinor,
-               COALESCE((
-                   SELECT SUM(ABS(t.amountMinor)) FROM txns t
-                   WHERE t.categoryId = e.categoryId
-                     AND t.type = 'EXPENSE'
-                     AND t.currency = e.currency
-                     AND t.occurredAt >= :fromMillis
-                     AND t.occurredAt < :toMillis
-               ), 0) AS spentMinor
+               e.limitMinor AS limitMinor
         FROM envelopes e
         INNER JOIN categories c ON c.id = e.categoryId
         WHERE e.monthKey = :monthKey
         ORDER BY c.sortOrder, c.name
         """,
     )
-    fun observeProgress(
-        monthKey: String,
-        fromMillis: Long,
-        toMillis: Long,
-    ): Flow<List<EnvelopeProgress>>
+    fun observeDefinitions(monthKey: String): Flow<List<EnvelopeDefinition>>
 
     @Upsert
     suspend fun upsert(envelope: EnvelopeEntity)

@@ -28,7 +28,7 @@ import com.suarezmillan.finanzas.data.local.entity.UserEntity
         DebtEntity::class,
         UserEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

@@ -168,7 +168,9 @@ De arriba a abajo, en este orden exacto (el orden *es* la jerarquía):
 
 1. **Saldo consolidado.** Monto en `displayL` + chip de tasa (`1 US$ = 4.120,50 · hace 2 h ⟳`). Si hay tasa manual, badge `fija` y punto ámbar.
    - Sub-línea: `US$ 1.020,45` (la otra divisa, nunca mezclada en el número grande).
-2. **"Te queda este mes"** — el dato más accionable. `$ 284.500 de $ 600.000` con barra segmentada por sobre. Tocar → Plan.
+2. **"Te queda este mes"** — el dato más accionable. `$ 284.500 de $ 600.000`
+   menos **todos** los gastos del mes convertidos a la base, con barra y
+   equivalencia en USD/VES que se recalcula con la tasa. Tocar → Plan.
 3. **Proyección de cierre** — `≈ $ 152.000 al 31 oct`, con micro-explicación (`3 pagos fijos, 1 ingreso esperado`). Sin esto, es un número mágico y se ignora.
 4. **Últimos 5 movimientos** — fila: icono categoría · nombre · cuenta/divisa · monto. Swipe izquierda = editar, derecha = duplicar.
 5. FAB central `+`.
@@ -210,7 +212,10 @@ Reglas:
 
 ### 5.3 Plan → Sobres
 
-- Una tarjeta por sobre: icono, nombre, `queda $ X de $ Y`, barra.
+- Una tarjeta por sobre: icono, nombre, `queda $ X de $ Y`, barra y equivalencia
+  en USD/VES cuando la divisa del sobre no es una de ellas.
+- El gasto del sobre incluye movimientos de otras divisas: se convierte con la
+  tasa histórica del movimiento o, si falta, con la cotización actual.
 - La barra cambia a ámbar al 80% y a rojo al 100%, **y añade texto** (`te pasaste $ 12.000`) para no depender del color.
 - Acción primaria: **mover dinero entre sobres** (cubrir un sobre desde otro), no "editar presupuesto". Cubrir es lo que la gente hace de verdad.
 - Reordenable por drag; los 3 sobres más usados suben solos.
@@ -240,7 +245,10 @@ Reglas:
 Este es el punto donde la mayoría de apps mienten. Reglas de diseño:
 
 1. **Un movimiento se guarda en su divisa original.** Nunca se convierte "de ida". Se persiste `monto` + `divisa` + `tasaAplicada` + `fuente` + `timestamp`.
-2. **Sumar solo dentro de la misma divisa.** El total consolidado es explícito: `Total en $ (convertido)` y el chip de tasa siempre visible y tocable.
+2. **Sumar convirtiendo a la divisa base, nunca mezclando unidades.** El total se
+   etiqueta como convertido, usa la tasa histórica del movimiento cuando la base
+   guardada coincide y, si falta una cotización, excluye el movimiento y lo avisa.
+   El chip de tasa siempre está visible y es tocable.
 3. **`≈` obligatorio** en cualquier cifra convertida. La ausencia de `≈` significa "esto es exacto".
 4. **Tasa manual = badge permanente** (`fija`, punto ámbar). Una tasa fija vieja es una decisión del usuario; debe verse.
 5. **Cambiar la tasa no reescribe el pasado.** Recalcula solo las vistas agregadas; el histórico conserva la tasa con la que se registró.
@@ -253,6 +261,7 @@ data class Txn(
   val amountMinor: Long,        // 1245000 = $12.450,00
   val currency: String,         // "ARS", "USD"
   val fxRateToBase: Double?,    // null si currency == base
+  val fxBaseCurrency: String?,  // divisa base con la que se guardó esa tasa
   val fxSource: FxSource,       // NONE | AUTO | MANUAL | FIXED
   val fxTimestamp: Long?,
   val occurredAt: Long,

@@ -44,6 +44,9 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
 **Hoy**
 - Saldo por divisa (local y USD), "te queda este mes", proyección de cierre y
   últimos movimientos.
+- **Presupuesto real**: "te queda" resta del límite todos los gastos del mes,
+  incluso los registrados en otra divisa. Debajo se muestran las equivalencias
+  en **USD y VES**, recalculadas cuando cambia la tasa.
 - **Sticker contextual**: emoji + frase que cambia según vencimientos, sobres al
   límite, presupuesto y hábito. Botón "Otro" para rotar variantes.
 - Pill de tasa → pantalla de divisas.
@@ -62,7 +65,9 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
 
 **Plan**
 - **Sobres**: límite mensual editable por categoría, con progreso real y aviso al
-  pasarse.
+  pasarse. Cada gasto se descuenta de su sobre aunque esté en otra divisa: se usa
+  la tasa guardada al registrarlo y, si no existe, la cotización actual. Cada
+  sobre muestra cuánto queda en USD y VES y se recalcula al actualizar la tasa.
 - **Pagos**: alta con selector de fecha y recurrencia, marcar pagado (crea el
   movimiento y permite deshacer) y eliminar.
 

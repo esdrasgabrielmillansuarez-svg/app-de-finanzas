@@ -56,8 +56,11 @@ import com.suarezmillan.finanzas.data.local.entity.CategoryKind
 import com.suarezmillan.finanzas.data.local.entity.Recurrence
 import com.suarezmillan.finanzas.data.local.entity.ScheduledPaymentEntity
 import com.suarezmillan.finanzas.data.local.model.EnvelopeProgress
+import com.suarezmillan.finanzas.ui.AmountEquivalence
 import com.suarezmillan.finanzas.ui.HomeUiState
 import com.suarezmillan.finanzas.ui.components.CategoryDialog
+import com.suarezmillan.finanzas.ui.components.EquivalenceText
+import com.suarezmillan.finanzas.ui.components.EquivalentRateNote
 import com.suarezmillan.finanzas.ui.components.MoneyText
 import com.suarezmillan.finanzas.ui.quick.AmountParser
 import com.suarezmillan.finanzas.ui.theme.Alerta
@@ -167,6 +170,7 @@ private fun EnvelopesTab(
             EnvelopeRow(
                 category = category,
                 progress = byCategory[category.id],
+                equivalence = state.envelopeEquivalents[category.id],
                 onClick = { editing = category },
             )
         }
@@ -204,33 +208,67 @@ private fun SummaryCard(state: HomeUiState) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "Te queda",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                MoneyText(
-                    minor = state.remainingMinor,
-                    currency = state.baseCurrency,
-                    style = MaterialTheme.typography.headlineSmall,
-                )
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Te queda",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (state.budgetLimitMinor > 0L) {
+                        MoneyText(
+                            minor = state.remainingMinor,
+                            currency = state.baseCurrency,
+                            signed = state.remainingMinor < 0L,
+                            style = MaterialTheme.typography.headlineSmall,
+                        )
+                        EquivalenceText(
+                            equivalence = state.remainingEquivalent,
+                            baseCurrency = state.baseCurrency,
+                        )
+                    } else {
+                        Text(
+                            "Sin presupuesto",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "gastado",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    MoneyText(
+                        minor = state.spentMinor,
+                        currency = state.baseCurrency,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    EquivalenceText(
+                        equivalence = state.spentEquivalent,
+                        baseCurrency = state.baseCurrency,
+                    )
+                }
             }
-            Column(horizontalAlignment = Alignment.End) {
+            if (state.budgetLimitMinor > 0L) {
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                Spacer(Modifier.height(8.dp))
                 Text(
-                    "gastado",
+                    "Presupuesto: ${MoneyFormat.format(state.budgetLimitMinor, state.baseCurrency)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                MoneyText(
-                    minor = state.spentMinor,
-                    currency = state.baseCurrency,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
+                EquivalentRateNote(usdToVesRate = state.usdToVesRate)
+                if (state.missingRateExpenses > 0) {
+                    Text(
+                        "${state.missingRateExpenses} gasto(s) del mes sin cotización no se sumaron.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
         }
     }
@@ -240,6 +278,7 @@ private fun SummaryCard(state: HomeUiState) {
 private fun EnvelopeRow(
     category: CategoryEntity,
     progress: EnvelopeProgress?,
+    equivalence: AmountEquivalence?,
     onClick: () -> Unit,
 ) {
     val accent = when {
@@ -272,12 +311,22 @@ private fun EnvelopeRow(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    MoneyText(
-                        minor = progress.remainingMinor,
-                        currency = progress.currency,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (progress.isOver) Peligro else MaterialTheme.colorScheme.onSurface,
-                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        MoneyText(
+                            minor = progress.remainingMinor,
+                            currency = progress.currency,
+                            signed = progress.remainingMinor < 0L,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (progress.isOver) Peligro else MaterialTheme.colorScheme.onSurface,
+                        )
+                        equivalence?.let {
+                            EquivalenceText(
+                                equivalence = it,
+                                baseCurrency = progress.currency,
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    }
                 }
             }
             if (progress != null) {

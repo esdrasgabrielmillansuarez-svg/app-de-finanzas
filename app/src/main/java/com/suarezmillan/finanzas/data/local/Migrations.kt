@@ -66,3 +66,16 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         )
     }
 }
+
+/**
+ * v3 → v4: guarda la divisa base usada al registrar el movimiento.
+ *
+ * Sin este dato no se puede convertir un gasto histórico a la divisa de un
+ * sobre sin usar la tasa de hoy. Las filas anteriores quedan en `NULL` y caen
+ * al conversor actual, sin inventar tasas.
+ */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE txns ADD COLUMN `fxBaseCurrency` TEXT")
+    }
+}
