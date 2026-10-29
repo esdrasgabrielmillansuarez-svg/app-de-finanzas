@@ -14,8 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Card
@@ -31,6 +34,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -50,15 +54,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.suarezmillan.finanzas.core.budget.EnvelopePeriod
 import com.suarezmillan.finanzas.core.money.MoneyFormat
 import com.suarezmillan.finanzas.data.local.entity.CategoryEntity
 import com.suarezmillan.finanzas.data.local.entity.CategoryKind
 import com.suarezmillan.finanzas.data.local.entity.Recurrence
 import com.suarezmillan.finanzas.data.local.entity.ScheduledPaymentEntity
+import com.suarezmillan.finanzas.data.local.model.EnvelopeInput
 import com.suarezmillan.finanzas.data.local.model.EnvelopeProgress
 import com.suarezmillan.finanzas.ui.AmountEquivalence
 import com.suarezmillan.finanzas.ui.HomeUiState
 import com.suarezmillan.finanzas.ui.components.CategoryDialog
+import com.suarezmillan.finanzas.ui.components.CategoryEmojis
 import com.suarezmillan.finanzas.ui.components.EquivalenceText
 import com.suarezmillan.finanzas.ui.components.EquivalentRateNote
 import com.suarezmillan.finanzas.ui.components.MoneyText
@@ -66,6 +73,7 @@ import com.suarezmillan.finanzas.ui.quick.AmountParser
 import com.suarezmillan.finanzas.ui.theme.Alerta
 import com.suarezmillan.finanzas.ui.theme.Peligro
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -76,7 +84,8 @@ private val dayFormatter = DateTimeFormatter.ofPattern("d MMM", Locale("es", "AR
 fun PlanScreen(
     state: HomeUiState,
     payments: List<ScheduledPaymentEntity>,
-    onSetLimit: (categoryId: String, limitMinor: Long) -> Unit,
+    onSaveEnvelope: (EnvelopeInput) -> Unit,
+    onRemoveEnvelope: (categoryId: String) -> Unit,
     onCreateCategory: (name: String, emoji: String, kind: CategoryKind) -> Unit,
     onAddPayment: (String, Long, Long, Recurrence, String?) -> Unit,
     onPay: (ScheduledPaymentEntity) -> Unit,
@@ -94,7 +103,8 @@ fun PlanScreen(
             when (tab) {
                 0 -> EnvelopesTab(
                     state = state,
-                    onSetLimit = onSetLimit,
+                    onSaveEnvelope = onSaveEnvelope,
+                    onRemoveEnvelope = onRemoveEnvelope,
                     onCreateCategory = onCreateCategory,
                 )
                 else -> PaymentsTab(
@@ -114,11 +124,21 @@ fun PlanScreen(
 @Composable
 private fun EnvelopesTab(
     state: HomeUiState,
-    onSetLimit: (String, Long) -> Unit,
+    onSaveEnvelope: (EnvelopeInput) -> Unit,
+    onRemoveEnvelope: (String) -> Unit,
     onCreateCategory: (String, String, CategoryKind) -> Unit,
 ) {
     val byCategory = remember(state.envelopes) { state.envelopes.associateBy { it.categoryId } }
-    val categories = state.categories.filter { it.kind == CategoryKind.EXPENSE }
+    // Sobres activos primero; dentro de cada grupo, el orden que eligió el usuario.
+    val categories = remember(state.categories, byCategory) {
+        state.categories
+            .filter { it.kind == CategoryKind.EXPENSE && !it.archived }
+            .sortedWith(
+                compareByDescending<CategoryEntity> { byCategory.containsKey(it.id) }
+                    .thenBy { it.sortOrder }
+                    .thenBy { it.name },
+            )
+    }
     var editing by remember { mutableStateOf<CategoryEntity?>(null) }
     var showCategoryDialog by rememberSaveable { mutableStateOf(false) }
 
@@ -137,12 +157,12 @@ private fun EnvelopesTab(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
-                    "Categorías",
+                    "Sobres",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
                 TextButton(onClick = { showCategoryDialog = true }) {
-                    Text("+ Nueva")
+                    Text("+ Categoría")
                 }
             }
         }
@@ -159,7 +179,8 @@ private fun EnvelopesTab(
 
         item {
             Text(
-                "Toca una categoría para asignarle un límite mensual.",
+                "Cada sobre tiene nombre, ícono y periodo propios. Los gastos de su " +
+                    "categoría se descuentan solos.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
@@ -181,8 +202,12 @@ private fun EnvelopesTab(
             category = category,
             current = byCategory[category.id],
             currency = state.baseCurrency,
-            onConfirm = { limit ->
-                onSetLimit(category.id, limit)
+            onSave = { input ->
+                onSaveEnvelope(input)
+                editing = null
+            },
+            onRemove = {
+                onRemoveEnvelope(category.id)
                 editing = null
             },
             onDismiss = { editing = null },
@@ -327,19 +352,30 @@ private fun EnvelopeRow(
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(category.emoji)
+                Text(progress?.emoji ?: category.emoji)
                 Spacer(Modifier.width(10.dp))
-                Text(
-                    text = category.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
-                )
-                if (progress == null) {
+                Column(Modifier.weight(1f)) {
                     Text(
-                        "sin límite",
+                        text = progress?.name ?: category.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = if (progress == null) {
+                            "Categoría ${category.name} · sin sobre"
+                        } else {
+                            "Categoría ${category.name} · ${progress.period.label} · " +
+                                progress.windowLabel
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (progress == null) {
+                    Text(
+                        "crear",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 } else {
                     Column(horizontalAlignment = Alignment.End) {
@@ -369,12 +405,28 @@ private fun EnvelopeRow(
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
                 )
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "${MoneyFormat.format(progress.spentMinor, progress.currency)} de " +
-                        MoneyFormat.format(progress.limitMinor, progress.currency),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "${MoneyFormat.format(progress.spentMinor, progress.currency)} de " +
+                            MoneyFormat.format(progress.limitMinor, progress.currency),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (progress.carryMinor > 0L) {
+                        Text(
+                            text = "+${MoneyFormat.format(progress.carryMinor, progress.currency)} arrastrado",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    } else if (progress.rollover) {
+                        Text(
+                            text = "arrastre activo",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
     }
@@ -509,13 +561,29 @@ private fun EnvelopeDialog(
     category: CategoryEntity,
     current: EnvelopeProgress?,
     currency: String,
-    onConfirm: (Long) -> Unit,
+    onSave: (EnvelopeInput) -> Unit,
+    onRemove: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var text by rememberSaveable {
-        mutableStateOf(current?.limitMinor?.let { minorToInput(it) } ?: "")
+    var name by rememberSaveable(category.id) {
+        mutableStateOf(current?.name ?: category.name)
     }
+    var emoji by rememberSaveable(category.id) {
+        mutableStateOf(current?.emoji ?: category.emoji)
+    }
+    var text by rememberSaveable(category.id) {
+        mutableStateOf(current?.baseLimitMinor?.let { minorToInput(it) } ?: "")
+    }
+    var periodName by rememberSaveable(category.id) {
+        mutableStateOf((current?.period ?: EnvelopePeriod.MONTHLY).name)
+    }
+    var rollover by rememberSaveable(category.id) {
+        mutableStateOf(current?.rollover ?: false)
+    }
+
+    val period = EnvelopePeriod.valueOf(periodName)
     val parsed = AmountParser.evaluateToMinor(text)
+    val window = remember(period) { period.windowFor(LocalDate.now()) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -523,19 +591,46 @@ private fun EnvelopeDialog(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,
         ) {
-            Column(Modifier.padding(20.dp)) {
-                Text("${category.emoji} ${category.name}", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(6.dp))
+            Column(
+                Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
                 Text(
-                    "Límite mensual en $currency",
+                    "${emoji.ifBlank { "💸" }} ${name.ifBlank { category.name }}",
+                    style = MaterialTheme.typography.titleLarge,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Sobre de la categoría ${category.name}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(28) },
+                    label = { Text("Nombre del sobre") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(10.dp))
+                Text("Ícono", style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.height(4.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(CategoryEmojis, key = { it }) { option ->
+                        FilterChip(
+                            selected = option == emoji,
+                            onClick = { emoji = option },
+                            label = { Text(option) },
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
-                    label = { Text("0,00") },
+                    label = { Text("Límite por periodo ($currency)") },
                     singleLine = true,
                     isError = text.isNotEmpty() && parsed == null,
                     modifier = Modifier.fillMaxWidth(),
@@ -549,14 +644,67 @@ private fun EnvelopeDialog(
                     )
                 }
                 Spacer(Modifier.height(12.dp))
+                Text("Periodo", style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    EnvelopePeriod.values().forEach { option ->
+                        FilterChip(
+                            selected = period == option,
+                            onClick = { periodName = option.name },
+                            label = { Text(option.label) },
+                        )
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Actual: ${window.label()} · cierra el " +
+                        window.endExclusive.format(dayFormatter),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Arrastrar sobrante", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Lo que no gastes pasa al siguiente periodo.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = rollover, onCheckedChange = { rollover = it })
+                }
+                if (current != null && current.carryMinor > 0L) {
+                    Text(
+                        text = "Este periodo arrastra " +
+                            MoneyFormat.format(current.carryMinor, currency) + ".",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                     TextButton(onClick = onDismiss) { Text("Cancelar") }
                     if (current != null) {
-                        TextButton(onClick = { onConfirm(0L) }) { Text("Quitar") }
+                        TextButton(onClick = onRemove) {
+                            Text("Quitar", color = Peligro)
+                        }
                     }
                     TextButton(
-                        onClick = { parsed?.let(onConfirm) },
-                        enabled = parsed != null,
+                        onClick = {
+                            onSave(
+                                EnvelopeInput(
+                                    categoryId = category.id,
+                                    name = name,
+                                    emoji = emoji,
+                                    limitMinor = parsed ?: 0L,
+                                    currency = currency,
+                                    period = period,
+                                    rollover = rollover,
+                                ),
+                            )
+                        },
+                        enabled = parsed != null && parsed > 0L && name.isNotBlank(),
                     ) { Text("Guardar") }
                 }
             }

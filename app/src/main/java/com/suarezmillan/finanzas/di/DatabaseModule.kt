@@ -6,6 +6,7 @@ import com.suarezmillan.finanzas.data.local.FinanzasDatabase
 import com.suarezmillan.finanzas.data.local.MIGRATION_1_2
 import com.suarezmillan.finanzas.data.local.MIGRATION_2_3
 import com.suarezmillan.finanzas.data.local.MIGRATION_3_4
+import com.suarezmillan.finanzas.data.local.MIGRATION_4_5
 import com.suarezmillan.finanzas.data.local.dao.AccountDao
 import com.suarezmillan.finanzas.data.local.dao.CategoryDao
 import com.suarezmillan.finanzas.data.local.dao.DebtDao
@@ -28,7 +29,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): FinanzasDatabase =
         Room.databaseBuilder(context, FinanzasDatabase::class.java, FinanzasDatabase.NAME)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .build()
 
     @Provides

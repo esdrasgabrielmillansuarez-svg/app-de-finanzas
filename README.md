@@ -65,10 +65,13 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
 - Toque en una fila → detalle con **Duplicar** y **Eliminar** (con deshacer).
 
 **Plan**
-- **Sobres**: límite mensual editable por categoría, con progreso real y aviso al
-  pasarse. Cada gasto se descuenta de su sobre aunque esté en otra divisa: se usa
-  la tasa guardada al registrarlo y, si no existe, la cotización actual. Cada
-  sobre muestra cuánto queda en USD y VES y se recalcula al actualizar la tasa.
+- **Sobres**: uno por categoría de gasto, con **nombre e ícono propios**, límite
+  por **periodo** (mensual, quincenal o semanal) y opción de **arrastrar el
+  sobrante**. Los periodos siguen el calendario (1–fin de mes, 1–15 / 16–fin,
+  lunes–domingo). Cada gasto se descuenta de su sobre aunque esté en otra divisa:
+  se usa la tasa guardada al registrarlo y, si no existe, la cotización actual.
+  Cada sobre muestra cuánto queda, su rango actual y, si aplica, cuánto arrastra;
+  las equivalencias en USD y VES se recalculan al actualizar la tasa.
 - **Pagos**: alta con selector de fecha y recurrencia, marcar pagado (crea el
   movimiento y permite deshacer) y eliminar.
 
@@ -190,8 +193,13 @@ app/src/main/java/com/suarezmillan/finanzas/
 - `MarketRateParsersTest` — euro de Frankfurter, ARS oficial y tabla global.
 - `LiveRateSettingsTest` — referencias, elección, base/secundaria y overrides
   sobreviven al reinicio.
+- `EnvelopePeriodTest` — rangos mensuales, quincenales y semanales por calendario.
+- `EnvelopeCarryTest` — arrastre solo desde periodos completos, acumulación y
+  ausencia de deuda negativa.
+- `HomeUiStateBudgetTest` — disponible como ingresos menos gastos, sin sumar
+  límites de sobres.
 
-**63 tests, 0 fallos** en `:app:testDebugUnitTest`.
+**86 tests, 0 fallos** en `:app:testDebugUnitTest`.
 
 ## Qué falta (a propósito)
 

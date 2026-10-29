@@ -213,13 +213,23 @@ Reglas:
 
 ### 5.3 Plan → Sobres
 
-- Una tarjeta por sobre: icono, nombre, `queda $ X de $ Y`, barra y equivalencia
-  en USD/VES cuando la divisa del sobre no es una de ellas.
-- El gasto del sobre incluye movimientos de otras divisas: se convierte con la
-  tasa histórica del movimiento o, si falta, con la cotización actual.
-- La barra cambia a ámbar al 80% y a rojo al 100%, **y añade texto** (`te pasaste $ 12.000`) para no depender del color.
-- Acción primaria: **mover dinero entre sobres** (cubrir un sobre desde otro), no "editar presupuesto". Cubrir es lo que la gente hace de verdad.
-- Reordenable por drag; los 3 sobres más usados suben solos.
+- Una tarjeta por categoría de gasto; los **sobres activos van primero** y el
+  resto queda como "crear sobre" sin esconder la categoría.
+- Cada sobre tiene **nombre e ícono propios**: la categoría solo define qué
+  gastos entran. El editor muestra nombre, emoji, límite, periodo y arrastre.
+- **Periodo por calendario**: mensual (1 al último día), quincenal (1–15 y
+  16–fin) y semanal (lunes–domingo). La tarjeta muestra el rango vigente y la
+  fecha de cierre.
+- **Arrastre opcional**: el sobrante de un periodo cerrado se suma al siguiente
+  solo si el sobre ya existía al empezar ese periodo. El periodo de creación no
+  arrastra y pasarse nunca genera deuda; el arrastre se acumula sin bajar de 0.
+- La tarjeta muestra `queda $ X de $ Y`, barra, equivalencia en USD/VES y
+  `+ $ Z arrastrado` cuando el sobre tiene sobrante.
+- El gasto incluye movimientos de otras divisas: se convierte con la tasa
+  histórica del movimiento o, si falta, con la cotización actual.
+- La barra cambia a ámbar al 80% y a rojo al 100%, **y añade texto** para no
+  depender del color.
+- **Quitar** elimina el sobre; la categoría y sus movimientos se conservan.
 
 ### 5.4 Plan → Calendario de pagos
 

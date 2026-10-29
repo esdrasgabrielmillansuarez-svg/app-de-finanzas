@@ -1,6 +1,7 @@
 package com.suarezmillan.finanzas.ui
 
 import android.net.Uri
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.suarezmillan.finanzas.core.currency.CurrencyQuote
@@ -23,6 +24,7 @@ import com.suarezmillan.finanzas.data.local.entity.Recurrence
 import com.suarezmillan.finanzas.data.local.entity.ScheduledPaymentEntity
 import com.suarezmillan.finanzas.data.local.entity.TxnEntity
 import com.suarezmillan.finanzas.data.local.entity.TxnType
+import com.suarezmillan.finanzas.data.local.model.EnvelopeInput
 import com.suarezmillan.finanzas.data.local.model.EnvelopeProgress
 import com.suarezmillan.finanzas.data.repo.AccountRepository
 import com.suarezmillan.finanzas.data.repo.BudgetRepository
@@ -30,28 +32,33 @@ import com.suarezmillan.finanzas.data.repo.CategoryRepository
 import com.suarezmillan.finanzas.data.repo.MonthSummary
 import com.suarezmillan.finanzas.data.repo.ScheduledPaymentRepository
 import com.suarezmillan.finanzas.data.repo.TxnRepository
-import com.suarezmillan.finanzas.data.repo.monthKeyOf
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import javax.inject.Inject
 
 /** Equivalencia de un importe en las dos divisas de referencia del producto. */
+@Immutable
 data class AmountEquivalence(
     val usdMinor: Long? = null,
     val vesMinor: Long? = null,
 )
 
+@Immutable
 data class HomeUiState(
     val baseCurrency: String = "VES",
     val secondaryCurrency: String = "USD",
@@ -122,11 +129,20 @@ class MainViewModel @Inject constructor(
     private val rateUpdater: ExchangeRateUpdater,
 ) : ViewModel() {
 
-    private val monthKey = monthKeyOf(System.currentTimeMillis())
-    private val month = YearMonth.now()
     private val zone = ZoneId.systemDefault()
-    private val fromMillis = month.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
-    private val toMillis = month.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
+
+    /**
+     * Día actual, reemitido a medianoche. Sin esto, el resumen y los periodos
+     * de los sobres se quedarían congelados mientras el proceso viva.
+     */
+    private val todayFlow: Flow<LocalDate> = flow {
+        while (true) {
+            val now = java.time.ZonedDateTime.now(zone)
+            emit(now.toLocalDate())
+            val nextMidnight = now.toLocalDate().plusDays(1).atStartOfDay(zone)
+            delay(java.time.Duration.between(now, nextMidnight).toMillis() + 1_000L)
+        }
+    }.distinctUntilChanged()
 
     private val _lastSaved = MutableStateFlow<TxnEntity?>(null)
     val lastSaved: StateFlow<TxnEntity?> = _lastSaved.asStateFlow()
@@ -178,6 +194,7 @@ class MainViewModel @Inject constructor(
 
     private data class Snapshot(
         val context: CurrencyContext,
+        val today: LocalDate,
         val balanceMinor: Long,
         val secondaryBalanceMinor: Long,
         val summary: MonthSummary,
@@ -198,15 +215,20 @@ class MainViewModel @Inject constructor(
         )
     }
 
-    private val snapshot: Flow<Snapshot> = context.flatMapLatest { ctx ->
+    private val snapshot: Flow<Snapshot> = combine(context, todayFlow) { ctx, today ->
+        ctx to today
+    }.flatMapLatest { (ctx, today) ->
+        val month = YearMonth.from(today)
+        val fromMillis = month.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val toMillis = month.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
         combine(
             txnRepository.observeNetBalance(ctx.base),
             txnRepository.observeNetBalance(ctx.secondary),
             txnRepository.observeMonthSummary(ctx.base, fromMillis, toMillis),
-            budgetRepository.observeEnvelopes(monthKey),
+            budgetRepository.observeEnvelopes(today),
             categoryRepository.observeAll(),
         ) { balance, secondaryBalance, summary, envelopes, categories ->
-            Snapshot(ctx, balance, secondaryBalance, summary, envelopes, categories)
+            Snapshot(ctx, today, balance, secondaryBalance, summary, envelopes, categories)
         }
     }
 
@@ -245,7 +267,7 @@ class MainViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private fun projectClose(snap: Snapshot): Long {
-        val today = java.time.LocalDate.now()
+        val today = snap.today
         val elapsed = today.dayOfMonth.coerceAtLeast(1)
         val daysInMonth = today.lengthOfMonth()
         val burnPerDay = snap.summary.spentMinor / elapsed
@@ -433,15 +455,21 @@ class MainViewModel @Inject constructor(
 
     // ------------------------------------------------------------------ presupuesto
 
-    fun setEnvelopeLimit(categoryId: String, limitMinor: Long) {
-        viewModelScope.launch {
-            budgetRepository.setLimit(
-                categoryId = categoryId,
-                monthKey = monthKey,
-                limitMinor = limitMinor.coerceAtLeast(0L),
-                currency = settings.baseCurrency.value,
-            )
+    /** Crea o actualiza un sobre conservando su identidad y su fecha de creación. */
+    fun saveEnvelope(input: EnvelopeInput) {
+        val clean = input.copy(name = input.name.trim().take(28))
+        if (clean.limitMinor <= 0L) {
+            removeEnvelope(clean.categoryId)
+            return
         }
+        viewModelScope.launch {
+            budgetRepository.save(clean.copy(currency = settings.baseCurrency.value))
+        }
+    }
+
+    /** Quita el sobre; los movimientos y la categoría se conservan. */
+    fun removeEnvelope(categoryId: String) {
+        viewModelScope.launch { budgetRepository.remove(categoryId) }
     }
 
     // ------------------------------------------------------------------ pagos programados

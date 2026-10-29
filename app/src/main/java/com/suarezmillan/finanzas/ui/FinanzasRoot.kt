@@ -299,7 +299,8 @@ fun FinanzasRoot(
                 2 -> PlanScreen(
                     state = state,
                     payments = payments,
-                    onSetLimit = { categoryId, limit -> vm.setEnvelopeLimit(categoryId, limit) },
+                    onSaveEnvelope = { vm.saveEnvelope(it) },
+                    onRemoveEnvelope = { vm.removeEnvelope(it) },
                     onCreateCategory = { name, emoji, kind -> vm.createCategory(name, emoji, kind) },
                     onAddPayment = { name, amount, dueAt, recurrence, categoryId ->
                         vm.addScheduledPayment(name, amount, dueAt, recurrence, categoryId)

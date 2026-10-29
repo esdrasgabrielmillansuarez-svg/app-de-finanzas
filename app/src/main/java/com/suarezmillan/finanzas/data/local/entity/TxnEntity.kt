@@ -29,6 +29,9 @@ enum class TxnType { EXPENSE, INCOME, TRANSFER }
         Index("accountId"),
         Index("categoryId"),
         Index("transferGroupId"),
+        // Consultas de sobres: gasto por tipo en un rango y por categoría.
+        Index("type", "occurredAt"),
+        Index("categoryId", "occurredAt"),
     ],
     foreignKeys = [
         ForeignKey(

@@ -22,9 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.suarezmillan.finanzas.data.local.entity.CategoryKind
 
-private val EMOJIS = listOf(
-    "💸", "🛒", "🍔", "🚕", "🏠", "🎬", "💊", "💡", "📱", "🎓", "💵", "🧑‍💻", "🎁", "🐾",
-)
+private val EMOJIS = CategoryEmojis
 
 /**
  * Crea una categoría propia. La app no siembra categorías: el usuario decide
