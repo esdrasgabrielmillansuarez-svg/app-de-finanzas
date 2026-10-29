@@ -44,8 +44,9 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
 **Hoy**
 - Saldo por divisa (local y USD), "te queda este mes", proyección de cierre y
   últimos movimientos.
-- **Presupuesto real**: "te queda" resta del límite todos los gastos del mes,
-  incluso los registrados en otra divisa. Debajo se muestran las equivalencias
+- **Disponible real**: "te queda este mes" es **ingresos del mes menos todos los
+  gastos**, incluso los registrados en otra divisa. El límite de sobres se
+  muestra aparte como tope por categoría. Debajo se muestran las equivalencias
   en **USD y VES**, recalculadas cuando cambia la tasa.
 - **Sticker contextual**: emoji + frase que cambia según vencimientos, sobres al
   límite, presupuesto y hábito. Botón "Otro" para rotar variantes.

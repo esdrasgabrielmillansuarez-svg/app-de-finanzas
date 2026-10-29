@@ -23,8 +23,8 @@ La app real está en Kotlin/Compose. Este prototipo replica las decisiones
 visuales y de contenido:
 
 - Marca del creador **Esdras Millan** visible.
-- Presupuesto = límite menos todos los gastos del mes, convertidos a la divisa
-  base.
+- Disponible = ingresos del mes menos todos los gastos, convertidos a la divisa
+  base. El límite de sobres se muestra aparte como tope por categoría.
 - Equivalencias en dólares y bolívares que se recalculan con la tasa actual.
 - Si falta una cotización se muestra **“sin cotización”**; no se inventa un
   valor.

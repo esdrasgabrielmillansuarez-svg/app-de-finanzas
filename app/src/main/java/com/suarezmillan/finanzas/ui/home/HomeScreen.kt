@@ -134,7 +134,7 @@ fun HomeScreen(
             }
         }
 
-        // 2. Te queda este mes (presupuesto menos gasto real del mes)
+        // 2. Te queda este mes = ingresos reales - gastos del mes
         item {
             Card(
                 onClick = onOpenPlan,
@@ -154,7 +154,7 @@ fun HomeScreen(
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            if (state.budgetLimitMinor > 0L) {
+                            if (state.hasMonthActivity) {
                                 MoneyText(
                                     minor = state.remainingMinor,
                                     currency = state.baseCurrency,
@@ -165,15 +165,22 @@ fun HomeScreen(
                                     equivalence = state.remainingEquivalent,
                                     baseCurrency = state.baseCurrency,
                                 )
+                                if (!state.hasIncome && state.spentMinor > 0L) {
+                                    Text(
+                                        "Sin ingresos registrados este mes.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                }
                             } else {
                                 Text(
-                                    "Sin presupuesto todavía",
+                                    "Sin ingresos ni gastos este mes",
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
-                        if (state.budgetLimitMinor > 0L) {
+                        if (state.hasMonthActivity) {
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
                                     "gastado",
@@ -193,17 +200,24 @@ fun HomeScreen(
                         }
                     }
                     Spacer(Modifier.height(10.dp))
-                    if (state.budgetLimitMinor > 0L) {
+                    if (state.hasIncome) {
                         LinearProgressIndicator(
                             progress = { state.usedRatio },
                             modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "Presupuesto: ${MoneyFormat.format(state.budgetLimitMinor, state.baseCurrency)}",
+                            "Ingresos del mes: ${MoneyFormat.format(state.incomeMinor, state.baseCurrency)}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        if (state.budgetLimitMinor > 0L) {
+                            Text(
+                                "Límite de sobres: ${MoneyFormat.format(state.budgetLimitMinor, state.baseCurrency)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                         EquivalentRateNote(
                             usdToVesRate = state.usdToVesRate,
                             modifier = Modifier.padding(top = 2.dp),
@@ -218,10 +232,21 @@ fun HomeScreen(
                         }
                     } else {
                         Text(
-                            "Toca la tarjeta para asignar un límite por categoría.",
+                            if (state.spentMinor > 0L) {
+                                "Registra un ingreso para calcular tu disponible del mes."
+                            } else {
+                                "Registra un ingreso o un gasto para empezar."
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        if (state.budgetLimitMinor > 0L) {
+                            Text(
+                                "Límite de sobres: ${MoneyFormat.format(state.budgetLimitMinor, state.baseCurrency)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }

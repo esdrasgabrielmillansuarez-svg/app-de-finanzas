@@ -168,9 +168,10 @@ De arriba a abajo, en este orden exacto (el orden *es* la jerarquía):
 
 1. **Saldo consolidado.** Monto en `displayL` + chip de tasa (`1 US$ = 4.120,50 · hace 2 h ⟳`). Si hay tasa manual, badge `fija` y punto ámbar.
    - Sub-línea: `US$ 1.020,45` (la otra divisa, nunca mezclada en el número grande).
-2. **"Te queda este mes"** — el dato más accionable. `$ 284.500 de $ 600.000`
-   menos **todos** los gastos del mes convertidos a la base, con barra y
-   equivalencia en USD/VES que se recalcula con la tasa. Tocar → Plan.
+2. **"Te queda este mes"** — el dato más accionable. **Ingresos del mes menos
+   todos los gastos** convertidos a la base, con barra y equivalencia en USD/VES
+   que se recalcula con la tasa. El **límite de sobres** se muestra aparte como
+   tope por categoría; no se suma al disponible. Tocar → Plan.
 3. **Proyección de cierre** — `≈ $ 152.000 al 31 oct`, con micro-explicación (`3 pagos fijos, 1 ingreso esperado`). Sin esto, es un número mágico y se ignora.
 4. **Últimos 5 movimientos** — fila: icono categoría · nombre · cuenta/divisa · monto. Swipe izquierda = editar, derecha = duplicar.
 5. FAB central `+`.

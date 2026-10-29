@@ -61,6 +61,7 @@ data class HomeUiState(
     val secondaryBalanceMinor: Long = 0L,
     val spentMinor: Long = 0L,
     val incomeMinor: Long = 0L,
+    /** Suma de los límites de sobres del mes; no es el dinero disponible. */
     val budgetLimitMinor: Long = 0L,
     val projectedCloseMinor: Long = 0L,
     val envelopes: List<EnvelopeProgress> = emptyList(),
@@ -72,20 +73,26 @@ data class HomeUiState(
     val usdToVesRate: Double? = null,
     val remainingEquivalent: AmountEquivalence = AmountEquivalence(),
     val spentEquivalent: AmountEquivalence = AmountEquivalence(),
-    val budgetEquivalent: AmountEquivalence = AmountEquivalence(),
     val envelopeEquivalents: Map<String, AmountEquivalence> = emptyMap(),
 ) {
     /**
-     * "Te queda este mes": presupuesto total menos todos los gastos del mes.
+     * "Te queda este mes": ingresos reales menos todos los gastos del mes.
+     *
      * Los gastos en otras divisas se convierten a [baseCurrency]; si falta la
-     * tasa, [missingRateExpenses] lo avisa y ese gasto no se resta.
+     * tasa, [missingRateExpenses] lo avisa y ese gasto no se resta. Los límites
+     * de sobres no se suman aquí: son topes por categoría, no ingresos.
      */
     val remainingMinor: Long
-        get() = budgetLimitMinor - spentMinor
+        get() = incomeMinor - spentMinor
 
+    val hasIncome: Boolean get() = incomeMinor > 0L
+
+    val hasMonthActivity: Boolean get() = incomeMinor > 0L || spentMinor > 0L
+
+    /** Proporción del ingreso mensual ya gastada. */
     val usedRatio: Float
-        get() = if (budgetLimitMinor <= 0L) 0f
-        else (spentMinor.toFloat() / budgetLimitMinor).coerceIn(0f, 1f)
+        get() = if (incomeMinor <= 0L) 0f
+        else (spentMinor.toFloat() / incomeMinor).coerceIn(0f, 1f)
 }
 
 sealed interface ReceiptUiState {
@@ -209,7 +216,7 @@ class MainViewModel @Inject constructor(
     ) { snap, recent ->
         val base = snap.context.base
         val limit = snap.envelopes.filter { it.currency == base }.sumOf { it.limitMinor }
-        val remaining = limit - snap.summary.spentMinor
+        val remaining = snap.summary.incomeMinor - snap.summary.spentMinor
         HomeUiState(
             baseCurrency = base,
             secondaryCurrency = snap.context.secondary,
@@ -228,7 +235,6 @@ class MainViewModel @Inject constructor(
             usdToVesRate = rates.rate(CurrencyRates.USD, CurrencyRates.VES),
             remainingEquivalent = equivalence(remaining, base),
             spentEquivalent = equivalence(snap.summary.spentMinor, base),
-            budgetEquivalent = equivalence(limit, base),
             envelopeEquivalents = snap.envelopes.associate { envelope ->
                 envelope.categoryId to equivalence(envelope.remainingMinor, envelope.currency)
             },

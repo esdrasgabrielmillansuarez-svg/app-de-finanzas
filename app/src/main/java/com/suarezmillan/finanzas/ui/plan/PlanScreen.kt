@@ -216,7 +216,7 @@ private fun SummaryCard(state: HomeUiState) {
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (state.budgetLimitMinor > 0L) {
+                    if (state.hasMonthActivity) {
                         MoneyText(
                             minor = state.remainingMinor,
                             currency = state.baseCurrency,
@@ -227,48 +227,79 @@ private fun SummaryCard(state: HomeUiState) {
                             equivalence = state.remainingEquivalent,
                             baseCurrency = state.baseCurrency,
                         )
+                        if (!state.hasIncome && state.spentMinor > 0L) {
+                            Text(
+                                "Sin ingresos registrados este mes.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
                     } else {
                         Text(
-                            "Sin presupuesto",
+                            "Sin ingresos ni gastos",
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        "gastado",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    MoneyText(
-                        minor = state.spentMinor,
-                        currency = state.baseCurrency,
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    EquivalenceText(
-                        equivalence = state.spentEquivalent,
-                        baseCurrency = state.baseCurrency,
-                    )
+                if (state.hasMonthActivity) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "gastado",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        MoneyText(
+                            minor = state.spentMinor,
+                            currency = state.baseCurrency,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        EquivalenceText(
+                            equivalence = state.spentEquivalent,
+                            baseCurrency = state.baseCurrency,
+                        )
+                    }
                 }
             }
-            if (state.budgetLimitMinor > 0L) {
-                Spacer(Modifier.height(8.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-                Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            Spacer(Modifier.height(8.dp))
+            if (state.hasIncome) {
+                LinearProgressIndicator(
+                    progress = { state.usedRatio },
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                )
+                Spacer(Modifier.height(6.dp))
                 Text(
-                    "Presupuesto: ${MoneyFormat.format(state.budgetLimitMinor, state.baseCurrency)}",
+                    "Ingresos del mes: ${MoneyFormat.format(state.incomeMinor, state.baseCurrency)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                EquivalentRateNote(usdToVesRate = state.usdToVesRate)
-                if (state.missingRateExpenses > 0) {
-                    Text(
-                        "${state.missingRateExpenses} gasto(s) del mes sin cotización no se sumaron.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
+            } else {
+                Text(
+                    if (state.spentMinor > 0L) {
+                        "Sin ingresos registrados: el disponible no se puede calcular."
+                    } else {
+                        "Registra un ingreso para calcular tu disponible del mes."
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (state.budgetLimitMinor > 0L) {
+                Text(
+                    "Límite de sobres: ${MoneyFormat.format(state.budgetLimitMinor, state.baseCurrency)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            EquivalentRateNote(usdToVesRate = state.usdToVesRate)
+            if (state.missingRateExpenses > 0) {
+                Text(
+                    "${state.missingRateExpenses} gasto(s) del mes sin cotización no se sumaron.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
         }
     }

@@ -126,7 +126,8 @@ fun FinanzasRoot(
         context = CoachContext(
             movementCount = movements.size,
             spentMinor = state.spentMinor,
-            budgetLimitMinor = state.budgetLimitMinor,
+            // El "presupuesto" del mes ahora son los ingresos reales registrados.
+            budgetLimitMinor = state.incomeMinor,
             daysLeftInMonth = today.lengthOfMonth() - today.dayOfMonth + 1,
             overBudgetEnvelopes = state.envelopes
                 .filter { it.currency == state.baseCurrency && it.isOver }
