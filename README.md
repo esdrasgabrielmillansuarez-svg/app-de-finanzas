@@ -54,9 +54,13 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
 
 **Registrar (FAB)**
 - Tipo, divisa, categoría, importe con aritmética inline (`12+450`, `1200/2`).
-- **Escanear factura**: foto/galería → OCR en el dispositivo (ML Kit, modelo
-  empaquetado) → precarga importe, comercio, divisa y, si ya creaste una
-  categoría compatible, la categoría; con aviso de confianza.
+- **Facturas en tanda**: cámara dentro de la app (CameraX, permiso pedido solo
+  al abrirla) para disparar varias seguidas sin salir, o **hasta 10 fotos** de
+  la galería de una vez. Se leen en cola con ML Kit (una a la vez, para no
+  agotar memoria) y caen en una **bandeja de revisión**: importe, comercio,
+  divisa y categoría sugeridos, todo editable. El OCR **nunca guarda solo**;
+  “Guardar N gastos” crea la tanda completa y el snackbar permite **Deshacer**.
+  Las fotos de cámara viven en el caché y se borran al guardar o descartar.
 - Guardado con **Deshacer** en el snackbar.
 
 **Movimientos**
@@ -169,6 +173,9 @@ app/src/main/java/com/suarezmillan/finanzas/
 | Migraciones Room escritas a mano | Los movimientos del usuario no son recuperables. |
 | PBKDF2 con sal y comparación en tiempo constante | Nunca se guarda la contraseña; una filtración de la DB no la revela. |
 | OCR local (ML Kit empaquetado) + parser propio | Sin subir facturas a ningún lado y con lógica testeable en JVM. |
+| Cámara propia (CameraX) en vez de la app del sistema | Para cargar varias facturas seguidas sin salir y volver; la foto queda en el caché de la app. |
+| OCR en cola de a una foto | Diez bitmaps a la vez en un teléfono modesto terminan en `OutOfMemoryError`. |
+| Bandeja de facturas editable antes de guardar | El OCR propone; el usuario confirma. Nunca se crea un movimiento sin revisión. |
 | El tema cambia **acento y superficies**, nunca el significado | USD sigue ámbar y la moneda local sigue cian: el color no deja de informar. |
 | Mensajes del coach deterministas y contextuales | Sin nube, sin IA impredecible y testeables; prioridad explícita por reglas. |
 | Recordatorios con WorkManager, no `AlarmManager` | No hace falta precisión al minuto ni permisos de alarmas exactas. |
@@ -185,6 +192,8 @@ app/src/main/java/com/suarezmillan/finanzas/
 - `CurrencyRatesTest` — paridad vía USD, referencias BCV/paralelo/USDT, EUR/ARS
   en vivo, ausencia de tasas inventadas y formato de tasas.
 - `ReceiptParserTest` — extracción de importe/comercio/categoría en tickets.
+- `ReceiptBatchTest` — bandeja de facturas: divisa/fecha aceptadas, categoría
+  solo si coincide con una del usuario y qué se guarda al confirmar.
 - `PasswordHasherTest` — hash/verificación, sal distinta, no reversible.
 - `AuthValidationTest` — nombre, correo normalizado, contraseña mínima.
 - `CsvExporterTest` — cabecera, decimales y escapado RFC 4180.
@@ -199,7 +208,7 @@ app/src/main/java/com/suarezmillan/finanzas/
 - `HomeUiStateBudgetTest` — disponible como ingresos menos gastos, sin sumar
   límites de sobres.
 
-**86 tests, 0 fallos** en `:app:testDebugUnitTest`.
+**97 tests, 0 fallos** en `:app:testDebugUnitTest`.
 
 ## Qué falta (a propósito)
 
@@ -217,11 +226,11 @@ app/src/main/java/com/suarezmillan/finanzas/
 
 ## Versiones
 
-Versión de la app: **0.5.0** (`versionCode 4`).
+Versión de la app: **0.7.0** (`versionCode 6`).
 
 Fijadas a un set conservador y mutuamente compatible: Kotlin 2.0.21, AGP 8.7.3,
 Gradle 8.9, Compose BOM 2024.10.01, Room 2.6.1, Hilt 2.52, KSP 2.0.21-1.0.28,
-ML Kit Text Recognition 16.0.1 y WorkManager 2.9.1.
+ML Kit Text Recognition 16.0.1, CameraX 1.4.2 y WorkManager 2.9.1.
 
 Actualización recomendada cuando se quiera tocar el tema:
 

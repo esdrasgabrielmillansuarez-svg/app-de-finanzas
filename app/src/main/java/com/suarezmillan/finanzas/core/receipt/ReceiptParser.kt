@@ -14,6 +14,24 @@ enum class CategoryHint {
     BILLS,
 }
 
+/**
+ * Palabras con las que se reconoce la pista en el nombre de una categoría del
+ * usuario. Vive aquí (y no en la UI) para poder probarlo sin Android.
+ */
+val CategoryHint.keywords: List<String>
+    get() = when (this) {
+        CategoryHint.SUPER -> listOf("super", "mercado", "compras")
+        CategoryHint.FOOD -> listOf("comida", "restaurante", "café", "cafe", "food")
+        CategoryHint.TRANSPORT -> listOf("transporte", "gasolina", "auto", "taxi", "metro")
+        CategoryHint.HOME -> listOf("casa", "hogar", "alquiler", "renta")
+        CategoryHint.FUN -> listOf("ocio", "diversión", "diversion", "cine", "salida")
+        CategoryHint.HEALTH -> listOf("salud", "farmacia", "médico", "medico")
+        CategoryHint.BILLS -> listOf("servicio", "luz", "agua", "internet", "factura")
+    }
+
+fun CategoryHint.matches(categoryName: String): Boolean =
+    keywords.any { categoryName.contains(it, ignoreCase = true) }
+
 data class ReceiptAnalysis(
     val merchant: String?,
     val totalMinor: Long?,

@@ -11,8 +11,14 @@ import com.suarezmillan.finanzas.core.currency.VesReference
 import com.suarezmillan.finanzas.core.currency.remote.ExchangeRateUpdater
 import com.suarezmillan.finanzas.core.currency.remote.RateRefreshState
 import com.suarezmillan.finanzas.core.fx.FxSource
-import com.suarezmillan.finanzas.core.receipt.ReceiptAnalysis
+import com.suarezmillan.finanzas.core.receipt.ReceiptCategory
+import com.suarezmillan.finanzas.core.receipt.ReceiptDraft
 import com.suarezmillan.finanzas.core.receipt.ReceiptScanner
+import com.suarezmillan.finanzas.core.receipt.ReceiptSource
+import com.suarezmillan.finanzas.core.receipt.ReceiptStatus
+import com.suarezmillan.finanzas.core.receipt.draftsToSave
+import com.suarezmillan.finanzas.core.receipt.newReceiptDraft
+import com.suarezmillan.finanzas.core.receipt.withAnalysis
 import com.suarezmillan.finanzas.core.reminder.ReminderScheduler
 import com.suarezmillan.finanzas.core.settings.AppSettings
 import com.suarezmillan.finanzas.core.settings.ThemeMode
@@ -45,10 +51,15 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.io.File
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
+import java.util.UUID
 import javax.inject.Inject
 
 /** Equivalencia de un importe en las dos divisas de referencia del producto. */
@@ -100,13 +111,6 @@ data class HomeUiState(
     val usedRatio: Float
         get() = if (incomeMinor <= 0L) 0f
         else (spentMinor.toFloat() / incomeMinor).coerceIn(0f, 1f)
-}
-
-sealed interface ReceiptUiState {
-    data object Idle : ReceiptUiState
-    data object Loading : ReceiptUiState
-    data class Done(val analysis: ReceiptAnalysis) : ReceiptUiState
-    data class Failed(val message: String) : ReceiptUiState
 }
 
 data class PaidPayment(
@@ -162,8 +166,20 @@ class MainViewModel @Inject constructor(
     val movements: StateFlow<List<TxnEntity>> = txnRepository.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val _receipt = MutableStateFlow<ReceiptUiState>(ReceiptUiState.Idle)
-    val receipt: StateFlow<ReceiptUiState> = _receipt.asStateFlow()
+    /**
+     * Bandeja de facturas: cada foto vive aquí hasta que el usuario confirma.
+     * El OCR nunca guarda solo y el orden de la lista es el orden de captura.
+     */
+    private val _receipts = MutableStateFlow<List<ReceiptDraft>>(emptyList())
+    val receipts: StateFlow<List<ReceiptDraft>> = _receipts.asStateFlow()
+
+    /** Últimos gastos creados en bloque, para el "Deshacer" de la bandeja. */
+    private val _lastBatch = MutableStateFlow<List<TxnEntity>>(emptyList())
+    val lastBatch: StateFlow<List<TxnEntity>> = _lastBatch.asStateFlow()
+
+    /** Serializa el OCR: ML Kit lee una foto a la vez para no agotar memoria. */
+    private val scanLock = Mutex()
+    private var batchSaving = false
 
     /** Catálogo completo con equivalentes en USD y EUR, recalculado si cambia una tasa. */
     val quotes: StateFlow<List<CurrencyQuote>> = rates.quotesFlow()
@@ -295,7 +311,6 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             val txn = buildTxn(type, amountMinor, currency, categoryId, merchant)
             publishSaved(txn)
-            _receipt.value = ReceiptUiState.Idle
         }
     }
 
@@ -388,6 +403,7 @@ class MainViewModel @Inject constructor(
         categoryId: String?,
         merchant: String?,
         accountId: String? = null,
+        occurredAt: Long = System.currentTimeMillis(),
     ): TxnEntity {
         val base = settings.baseCurrency.value
         val isBase = currency.equals(base, ignoreCase = true)
@@ -401,7 +417,7 @@ class MainViewModel @Inject constructor(
             accountId = account,
             categoryId = categoryId,
             merchant = merchant,
-            occurredAt = System.currentTimeMillis(),
+            occurredAt = occurredAt,
             fxRateToBase = fx,
             fxBaseCurrency = base,
             fxSource = when {
@@ -535,16 +551,142 @@ class MainViewModel @Inject constructor(
 
     // ------------------------------------------------------------------ facturas
 
-    fun analyzeReceipt(uri: Uri) {
-        _receipt.value = ReceiptUiState.Loading
+    /**
+     * Añade fotos a la bandeja y arranca (o continúa) la lectura en cola.
+     *
+     * Se leen una por una: ML Kit mantiene un bitmap en memoria por imagen y
+     * abrir diez a la vez en un teléfono modesto termina en `OutOfMemoryError`.
+     */
+    fun addReceipts(uris: List<Uri>, source: ReceiptSource) {
+        if (uris.isEmpty()) return
+        val now = System.currentTimeMillis()
+        val base = settings.baseCurrency.value
+        val fresh = uris.map { uri ->
+            newReceiptDraft(
+                id = UUID.randomUUID().toString(),
+                source = source,
+                imageUri = uri.toString(),
+                baseCurrency = base,
+                now = now,
+            )
+        }
+        _receipts.update { it + fresh }
+        pumpScans()
+    }
+
+    private fun pumpScans() {
         viewModelScope.launch {
-            runCatching { receiptScanner.scan(uri, settings.baseCurrency.value) }
-                .onSuccess { _receipt.value = ReceiptUiState.Done(it) }
-                .onFailure { _receipt.value = ReceiptUiState.Failed(it.message ?: "No se pudo leer la imagen") }
+            scanLock.withLock {
+                while (true) {
+                    val next = _receipts.value.firstOrNull { it.status == ReceiptStatus.SCANNING }
+                        ?: break
+                    scanOne(next)
+                }
+            }
         }
     }
 
-    fun clearReceipt() {
-        _receipt.value = ReceiptUiState.Idle
+    private suspend fun scanOne(draft: ReceiptDraft) {
+        val base = settings.baseCurrency.value
+        val secondary = settings.secondaryCurrency.value
+        val categories = state.value.categories
+            .filter { it.kind == CategoryKind.EXPENSE }
+            .map { ReceiptCategory(it.id, it.name) }
+        runCatching { receiptScanner.scan(Uri.parse(draft.imageUri), base) }
+            .onSuccess { analysis ->
+                updateReceipt(draft.id) {
+                    it.withAnalysis(analysis, base, secondary, categories, System.currentTimeMillis(), zone)
+                }
+            }
+            .onFailure { error ->
+                updateReceipt(draft.id) {
+                    it.copy(
+                        status = ReceiptStatus.FAILED,
+                        error = error.message ?: "No se pudo leer la imagen",
+                    )
+                }
+            }
+    }
+
+    private fun updateReceipt(id: String, transform: (ReceiptDraft) -> ReceiptDraft) {
+        _receipts.update { list -> list.map { if (it.id == id) transform(it) else it } }
+    }
+
+    fun updateReceiptAmount(id: String, amountMinor: Long?) =
+        updateReceipt(id) { it.copy(amountMinor = amountMinor) }
+
+    fun updateReceiptCurrency(id: String, currency: String) =
+        updateReceipt(id) { it.copy(currency = currency) }
+
+    fun updateReceiptMerchant(id: String, merchant: String) =
+        updateReceipt(id) { it.copy(merchant = merchant.take(40)) }
+
+    fun updateReceiptCategory(id: String, categoryId: String) =
+        updateReceipt(id) { it.copy(categoryId = categoryId) }
+
+    fun toggleReceipt(id: String) = updateReceipt(id) { it.copy(include = !it.include) }
+
+    fun removeReceipt(id: String) {
+        val draft = _receipts.value.firstOrNull { it.id == id } ?: return
+        _receipts.update { list -> list.filterNot { it.id == id } }
+        deleteTemporaryImage(draft)
+    }
+
+    fun clearReceipts() {
+        val drafts = _receipts.value
+        if (drafts.isEmpty()) return
+        _receipts.value = emptyList()
+        drafts.forEach { deleteTemporaryImage(it) }
+    }
+
+    /** Guarda de golpe las facturas confirmadas; las incompletas se quedan. */
+    fun saveReceipts() {
+        if (batchSaving) return
+        val ready = draftsToSave(_receipts.value)
+        if (ready.isEmpty()) return
+        batchSaving = true
+        viewModelScope.launch {
+            try {
+                val saved = ready.map { draft ->
+                    buildTxn(
+                        type = TxnType.EXPENSE,
+                        amountMinor = draft.amountMinor ?: 0L,
+                        currency = draft.currency,
+                        categoryId = draft.categoryId,
+                        merchant = draft.merchant?.trim()?.takeIf { it.isNotBlank() },
+                        occurredAt = draft.occurredAt,
+                    )
+                }
+                saved.forEach { txnRepository.add(it) }
+                _lastSavedCount.value = txnRepository.count()
+                _lastBatch.value = saved
+                val savedIds = ready.mapTo(HashSet()) { it.id }
+                _receipts.update { list -> list.filterNot { it.id in savedIds } }
+                ready.forEach { deleteTemporaryImage(it) }
+            } finally {
+                batchSaving = false
+            }
+        }
+    }
+
+    fun undoLastBatch() {
+        val saved = _lastBatch.value
+        if (saved.isEmpty()) return
+        viewModelScope.launch {
+            saved.forEach { txnRepository.delete(it) }
+            _lastBatch.value = emptyList()
+        }
+    }
+
+    fun clearLastBatch() {
+        _lastBatch.value = emptyList()
+    }
+
+    /** Las fotos de cámara viven en `cacheDir`: se borran al guardar o descartar. */
+    private fun deleteTemporaryImage(draft: ReceiptDraft) {
+        if (!draft.ownsTemporaryFile) return
+        runCatching {
+            Uri.parse(draft.imageUri).path?.let { File(it).delete() }
+        }
     }
 }

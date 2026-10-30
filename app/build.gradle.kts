@@ -14,8 +14,8 @@ android {
         applicationId = "com.suarezmillan.finanzas"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.6.0"
+        versionCode = 6
+        versionName = "0.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -69,6 +69,12 @@ dependencies {
 
     // OCR offline (modelo incluido en el APK): sin INTERNET, la factura no sale del teléfono.
     implementation(libs.mlkit.text.recognition)
+
+    // Cámara para fotografiar facturas sin salir de la app.
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

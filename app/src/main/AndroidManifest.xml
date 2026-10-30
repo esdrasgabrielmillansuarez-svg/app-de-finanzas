@@ -14,6 +14,17 @@
     -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!--
+      Cámara: solo para fotografiar facturas. La foto se lee con ML Kit en el
+      mismo teléfono y se borra al guardar o descartar la factura.
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- La app sigue funcionando sin cámara (galería, registro manual). -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
     <application
         android:name=".FinanzasApp"
         android:allowBackup="false"

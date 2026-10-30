@@ -373,7 +373,7 @@ Alineado con este documento:
 - Detalle de movimiento (duplicar / eliminar con deshacer) desde Hoy y Movimientos.
 - Divisas: catálogo de ~56 monedas agrupadas por país/región, equivalencia en USD y EUR, base/secundaria y tasa manual por divisa.
 - **Referencias en vivo**: BCV oficial, dólar paralelo y USDT (estimado con el paralelo) para el bolívar; euro del BCE y peso argentino oficial. Cacheadas con fecha visible y override manual por referencia en Ajustes → Tasas de cambio.
-- Facturas: OCR en el dispositivo (ML Kit, modelo empaquetado) + parser determinista que precarga importe, comercio, categoría y divisa.
+- Facturas: OCR en el dispositivo (ML Kit, modelo empaquetado) + parser determinista que precarga importe, comercio, categoría y divisa. Se pueden cargar **varias de una vez** con la cámara propia (CameraX, disparos seguidos sin salir) o con hasta 10 fotos de la galería; se leen en cola y se revisan en una **bandeja editable** antes de guardar la tanda completa (con deshacer). Las fotos de cámara se borran del caché al guardar o descartar.
 - Exportación CSV de movimientos vía FileProvider (el usuario elige el destino) y borrado masivo con confirmación.
 - **Apariencia**: modo claro/oscuro/sistema y seis temas con selector en vivo; el acento no altera la semántica de divisa. Persistido en `PreferenceStore`.
 - **Sticker contextual** en Hoy (`CoachEngine` + `StickerCard`) con rotación de variantes y mensajes de hito al guardar.

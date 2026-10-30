@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -50,6 +51,8 @@ import com.suarezmillan.finanzas.core.coach.CoachEngine
 import com.suarezmillan.finanzas.core.coach.DuePayment
 import com.suarezmillan.finanzas.core.export.CsvExporter
 import com.suarezmillan.finanzas.core.export.shareCsv
+import com.suarezmillan.finanzas.core.receipt.ReceiptSource
+import com.suarezmillan.finanzas.data.local.entity.CategoryKind
 import com.suarezmillan.finanzas.data.local.entity.TxnEntity
 import com.suarezmillan.finanzas.ui.ajustes.RatesSettingsScreen
 import com.suarezmillan.finanzas.ui.ajustes.SettingsScreen
@@ -59,6 +62,8 @@ import com.suarezmillan.finanzas.ui.movs.MovementsScreen
 import com.suarezmillan.finanzas.ui.movs.TxnDetailDialog
 import com.suarezmillan.finanzas.ui.plan.PlanScreen
 import com.suarezmillan.finanzas.ui.quick.QuickEntrySheet
+import com.suarezmillan.finanzas.ui.receipt.ReceiptBatchSheet
+import com.suarezmillan.finanzas.ui.receipt.ReceiptCameraDialog
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -87,7 +92,8 @@ fun FinanzasRoot(
     val lastPaid by vm.lastPaid.collectAsStateWithLifecycle()
     val lastDeleted by vm.lastDeleted.collectAsStateWithLifecycle()
     val payments by vm.payments.collectAsStateWithLifecycle()
-    val receipt by vm.receipt.collectAsStateWithLifecycle()
+    val receipts by vm.receipts.collectAsStateWithLifecycle()
+    val lastBatch by vm.lastBatch.collectAsStateWithLifecycle()
     val quotes by vm.quotes.collectAsStateWithLifecycle()
     val vesReferences by vm.vesReferences.collectAsStateWithLifecycle()
     val activeVesReference by vm.activeVesReference.collectAsStateWithLifecycle()
@@ -107,6 +113,9 @@ fun FinanzasRoot(
     var coachVariant by rememberSaveable { mutableIntStateOf(0) }
     var notificationAsked by rememberSaveable { mutableStateOf(false) }
     var detailTxn by remember { mutableStateOf<TxnEntity?>(null) }
+    var cameraOpen by rememberSaveable { mutableStateOf(false) }
+    var batchOpen by rememberSaveable { mutableStateOf(false) }
+    var pickImages by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
 
@@ -142,6 +151,39 @@ fun FinanzasRoot(
         ),
         variant = coachVariant,
     )
+
+    // ------------------------------------------------------------------ facturas
+    // Hasta 10 fotos por tanda: el OCR las lee en cola, una detrás de otra.
+    val galleryPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10),
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            vm.addReceipts(uris, ReceiptSource.GALLERY)
+            batchOpen = true
+        }
+    }
+
+    LaunchedEffect(pickImages) {
+        if (!pickImages) return@LaunchedEffect
+        pickImages = false
+        galleryPicker.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+        )
+    }
+
+    LaunchedEffect(lastBatch) {
+        if (lastBatch.isEmpty()) return@LaunchedEffect
+        val result = snackbar.showSnackbar(
+            message = if (lastBatch.size == 1) {
+                "🧾 1 gasto guardado"
+            } else {
+                "🧾 ${lastBatch.size} gastos guardados"
+            },
+            actionLabel = "Deshacer",
+            duration = SnackbarDuration.Short,
+        )
+        if (result == SnackbarResult.ActionPerformed) vm.undoLastBatch() else vm.clearLastBatch()
+    }
 
     // ------------------------------------------------------------------ permiso de notificaciones
     val notificationPermission = rememberLauncherForActivityResult(
@@ -349,21 +391,75 @@ fun FinanzasRoot(
     if (quickOpen) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
-            onDismissRequest = {
-                quickOpen = false
-                vm.clearReceipt()
-            },
+            onDismissRequest = { quickOpen = false },
             sheetState = sheetState,
         ) {
             QuickEntrySheet(
                 state = state,
-                receipt = receipt,
-                onScan = { vm.analyzeReceipt(it) },
-                onClearReceipt = { vm.clearReceipt() },
+                pendingReceipts = receipts.size,
+                onOpenCamera = {
+                    quickOpen = false
+                    cameraOpen = true
+                },
+                onPickImages = {
+                    quickOpen = false
+                    pickImages = true
+                },
+                onOpenReceipts = {
+                    quickOpen = false
+                    batchOpen = true
+                },
                 onCreateCategory = { name, emoji, kind -> vm.createCategory(name, emoji, kind) },
                 onSave = { type, amountMinor, currency, categoryId, merchant ->
                     vm.saveQuickEntry(type, amountMinor, currency, categoryId, merchant)
                     quickOpen = false
+                },
+            )
+        }
+    }
+
+    if (cameraOpen) {
+        ReceiptCameraDialog(
+            onCaptured = { uri -> vm.addReceipts(listOf(uri), ReceiptSource.CAMERA) },
+            onDismiss = {
+                cameraOpen = false
+                if (vm.receipts.value.isNotEmpty()) batchOpen = true
+            },
+        )
+    }
+
+    if (batchOpen) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { batchOpen = false },
+            sheetState = sheetState,
+        ) {
+            ReceiptBatchSheet(
+                drafts = receipts,
+                categories = state.categories.filter { it.kind == CategoryKind.EXPENSE },
+                baseCurrency = state.baseCurrency,
+                secondaryCurrency = state.secondaryCurrency,
+                onAmount = { id, minor -> vm.updateReceiptAmount(id, minor) },
+                onMerchant = { id, text -> vm.updateReceiptMerchant(id, text) },
+                onCurrency = { id, code -> vm.updateReceiptCurrency(id, code) },
+                onCategory = { id, categoryId -> vm.updateReceiptCategory(id, categoryId) },
+                onToggle = { vm.toggleReceipt(it) },
+                onRemove = { vm.removeReceipt(it) },
+                onCreateCategory = { name, emoji ->
+                    vm.createCategory(name, emoji, CategoryKind.EXPENSE)
+                },
+                onCamera = {
+                    batchOpen = false
+                    cameraOpen = true
+                },
+                onGallery = {
+                    batchOpen = false
+                    pickImages = true
+                },
+                onClear = { vm.clearReceipts() },
+                onSave = {
+                    vm.saveReceipts()
+                    batchOpen = false
                 },
             )
         }

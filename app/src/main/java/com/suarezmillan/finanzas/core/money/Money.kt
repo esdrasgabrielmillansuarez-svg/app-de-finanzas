@@ -82,6 +82,18 @@ object MoneyFormat {
     }
 
     /**
+     * Importe para un campo de edición: sin símbolo ni separador de miles, con
+     * coma decimal. `210_000` → `"2100"` · `210_050` → `"2100,50"`.
+     * Es el formato que entiende `AmountParser`.
+     */
+    fun editInput(minor: Long): String {
+        val value = abs(minor)
+        val major = value / 100
+        val cents = (value % 100).toInt()
+        return if (cents == 0) major.toString() else "$major,${cents.toString().padStart(2, '0')}"
+    }
+
+    /**
      * Tasa de cambio legible: `1.050` · `3,75` · `0,000952`.
      * Sin ceros de relleno: la magnitud manda cuántos decimales mostrar.
      */

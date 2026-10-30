@@ -1,10 +1,5 @@
 package com.suarezmillan.finanzas.ui.quick
 
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +19,8 @@ import androidx.compose.material.icons.rounded.DocumentScanner
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -45,11 +41,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.suarezmillan.finanzas.core.money.MoneyFormat
-import com.suarezmillan.finanzas.core.receipt.CategoryHint
 import com.suarezmillan.finanzas.data.local.entity.CategoryKind
 import com.suarezmillan.finanzas.data.local.entity.TxnType
 import com.suarezmillan.finanzas.ui.HomeUiState
-import com.suarezmillan.finanzas.ui.ReceiptUiState
 import com.suarezmillan.finanzas.ui.components.CategoryDialog
 
 /**
@@ -59,9 +53,10 @@ import com.suarezmillan.finanzas.ui.components.CategoryDialog
 @Composable
 fun QuickEntrySheet(
     state: HomeUiState,
-    receipt: ReceiptUiState,
-    onScan: (Uri) -> Unit,
-    onClearReceipt: () -> Unit,
+    pendingReceipts: Int,
+    onOpenCamera: () -> Unit,
+    onPickImages: () -> Unit,
+    onOpenReceipts: () -> Unit,
     onCreateCategory: (name: String, emoji: String, kind: CategoryKind) -> Unit,
     onSave: (TxnType, Long, String, String, String?) -> Unit,
 ) {
@@ -72,6 +67,7 @@ fun QuickEntrySheet(
     var categoryId by rememberSaveable { mutableStateOf<String?>(null) }
     var showCategoryDialog by rememberSaveable { mutableStateOf(false) }
     var pendingCategoryName by rememberSaveable { mutableStateOf<String?>(null) }
+    var invoiceMenu by rememberSaveable { mutableStateOf(false) }
 
     val categories = remember(state.categories, type) {
         val wanted = if (type == TxnType.EXPENSE) CategoryKind.EXPENSE else CategoryKind.INCOME
@@ -93,30 +89,7 @@ fun QuickEntrySheet(
         }
     }
 
-    // Resultado del OCR: precarga importe/comercio/divisa/categoría, nunca guarda sola.
-    LaunchedEffect(receipt) {
-        val analysis = (receipt as? ReceiptUiState.Done)?.analysis ?: return@LaunchedEffect
-        type = TxnType.EXPENSE
-        analysis.totalMinor?.let { total ->
-            expression = minorToExpression(total)
-        }
-        analysis.merchant?.let { merchant = it }
-        analysis.currency
-            ?.takeIf { it == state.baseCurrency || it == state.secondaryCurrency }
-            ?.let { currency = it }
-        analysis.categoryHint?.let { hint ->
-            state.categories
-                .firstOrNull { it.kind == CategoryKind.EXPENSE && hint.matches(it.name) }
-                ?.let { categoryId = it.id }
-        }
-    }
-
-    val picker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia(),
-    ) { uri: Uri? ->
-        if (uri != null) onScan(uri)
-    }
-
+    // El OCR ya no rellena el formulario: la bandeja de facturas se revisa aparte.
     val amountMinor = AmountParser.evaluateToMinor(expression)
 
     val press: (String) -> Unit = { key ->
@@ -149,24 +122,60 @@ fun QuickEntrySheet(
                 label = { Text("Ingreso") },
             )
             Spacer(Modifier.weight(1f))
-            OutlinedButton(
-                onClick = {
-                    picker.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+            Box {
+                OutlinedButton(onClick = { invoiceMenu = true }) {
+                    Icon(Icons.Rounded.DocumentScanner, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Factura")
+                }
+                DropdownMenu(
+                    expanded = invoiceMenu,
+                    onDismissRequest = { invoiceMenu = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("📷 Tomar foto") },
+                        onClick = {
+                            invoiceMenu = false
+                            onOpenCamera()
+                        },
                     )
-                },
-            ) {
-                Icon(Icons.Rounded.DocumentScanner, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Factura")
+                    DropdownMenuItem(
+                        text = { Text("🖼️ Elegir varias") },
+                        onClick = {
+                            invoiceMenu = false
+                            onPickImages()
+                        },
+                    )
+                }
             }
         }
 
-        ReceiptBanner(
-            receipt = receipt,
-            fallbackCurrency = state.baseCurrency,
-            onDiscard = onClearReceipt,
-        )
+        if (pendingReceipts > 0) {
+            Card(
+                shape = MaterialTheme.shapes.small,
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                ),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = if (pendingReceipts == 1) {
+                            "🧾 1 factura por revisar"
+                        } else {
+                            "🧾 $pendingReceipts facturas por revisar"
+                        },
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = onOpenReceipts) { Text("Revisar") }
+                }
+            }
+        }
 
         Spacer(Modifier.height(4.dp))
 
@@ -298,83 +307,6 @@ fun QuickEntrySheet(
     }
 }
 
-/**
- * Estado del análisis de factura. Solo informa: el usuario confirma con
- * "Guardar". Si la confianza es baja, se dice explícitamente.
- */
-@Composable
-private fun ReceiptBanner(
-    receipt: ReceiptUiState,
-    fallbackCurrency: String,
-    onDiscard: () -> Unit,
-) {
-    when (receipt) {
-        ReceiptUiState.Idle -> Unit
-
-        ReceiptUiState.Loading -> Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-            Spacer(Modifier.width(8.dp))
-            Text("Leyendo la factura…", style = MaterialTheme.typography.labelMedium)
-        }
-
-        is ReceiptUiState.Failed -> Text(
-            text = "No se pudo leer: ${receipt.message}",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-
-        is ReceiptUiState.Done -> {
-            val analysis = receipt.analysis
-            Card(
-                shape = MaterialTheme.shapes.small,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            ) {
-                Column(Modifier.padding(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "Factura leída · ${(analysis.confidence * 100).toInt()}%",
-                            style = MaterialTheme.typography.labelLarge,
-                            modifier = Modifier.weight(1f),
-                        )
-                        TextButton(onClick = onDiscard) { Text("Descartar") }
-                    }
-                    analysis.totalMinor?.let {
-                        Text(
-                            "Total detectado: ${MoneyFormat.format(it, analysis.currency ?: fallbackCurrency)}",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                    analysis.date?.let {
-                        Text("Fecha: $it", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    analysis.merchant?.let {
-                        Text("Comercio: $it", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    if (analysis.warnings.isNotEmpty()) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = analysis.warnings.joinToString(" · "),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Text(
-                        "Revisa los datos antes de guardar.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-    }
-}
-
 @Composable
 private fun CurrencyChip(currency: String, selected: Boolean, onClick: () -> Unit) {
     FilterChip(
@@ -431,28 +363,4 @@ private fun appendOperator(expression: String, op: String): String = when {
     expression.isEmpty() -> if (op == "-") op else expression
     expression.last() in "+-*/" -> expression.dropLast(1) + op
     else -> expression + op
-}
-
-/** 210_000 → "2100" · 210_050 → "2100,50" (formato del teclado, no del display). */
-private fun minorToExpression(minor: Long): String {
-    val major = minor / 100
-    val cents = (minor % 100).toInt()
-    return if (cents == 0) major.toString() else "%d,%02d".format(major, cents)
-}
-
-/**
- * El OCR solo sugiere una categoría si el usuario ya creó una cuyo nombre
- * encaja. No hay categorías de ejemplo ni IDs fijos.
- */
-private fun CategoryHint.matches(categoryName: String): Boolean {
-    val keywords = when (this) {
-        CategoryHint.SUPER -> listOf("super", "mercado", "compras")
-        CategoryHint.FOOD -> listOf("comida", "restaurante", "café", "cafe", "food")
-        CategoryHint.TRANSPORT -> listOf("transporte", "gasolina", "auto", "taxi", "metro")
-        CategoryHint.HOME -> listOf("casa", "hogar", "alquiler", "renta")
-        CategoryHint.FUN -> listOf("ocio", "diversión", "diversion", "cine", "salida")
-        CategoryHint.HEALTH -> listOf("salud", "farmacia", "médico", "medico")
-        CategoryHint.BILLS -> listOf("servicio", "luz", "agua", "internet", "factura")
-    }
-    return keywords.any { categoryName.contains(it, ignoreCase = true) }
 }
