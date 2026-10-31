@@ -50,8 +50,12 @@ import com.suarezmillan.finanzas.core.coach.CoachContext
 import com.suarezmillan.finanzas.core.coach.CoachEngine
 import com.suarezmillan.finanzas.core.coach.DuePayment
 import com.suarezmillan.finanzas.core.export.CsvExporter
+import com.suarezmillan.finanzas.core.export.buildMonthlyReportPdf
 import com.suarezmillan.finanzas.core.export.shareCsv
+import com.suarezmillan.finanzas.core.export.sharePdf
 import com.suarezmillan.finanzas.core.receipt.ReceiptSource
+import com.suarezmillan.finanzas.core.report.ReportEnvelope
+import com.suarezmillan.finanzas.core.report.buildMonthlyReport
 import com.suarezmillan.finanzas.data.local.entity.CategoryKind
 import com.suarezmillan.finanzas.data.local.entity.TxnEntity
 import com.suarezmillan.finanzas.ui.ajustes.RatesSettingsScreen
@@ -66,6 +70,7 @@ import com.suarezmillan.finanzas.ui.receipt.ReceiptBatchSheet
 import com.suarezmillan.finanzas.ui.receipt.ReceiptCameraDialog
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
@@ -245,6 +250,35 @@ fun FinanzasRoot(
         )
     }
 
+    /** Reporte del mes en curso, con la tasa histórica de cada movimiento. */
+    fun exportPdf() {
+        val month = YearMonth.now()
+        val names = state.categories.associate { it.id to it.name }
+        val report = buildMonthlyReport(
+            month = month,
+            baseCurrency = state.baseCurrency,
+            txns = movements,
+            categoryName = { id -> id?.let { names[it] } ?: "" },
+            envelopes = state.envelopes.map { envelope ->
+                ReportEnvelope(
+                    name = envelope.name,
+                    emoji = envelope.emoji,
+                    currency = envelope.currency,
+                    limitMinor = envelope.limitMinor,
+                    spentMinor = envelope.spentMinor,
+                    remainingMinor = envelope.remainingMinor,
+                    windowLabel = envelope.windowLabel,
+                )
+            },
+            currentRate = vm::rateBetween,
+        )
+        sharePdf(
+            context = context,
+            bytes = buildMonthlyReportPdf(report),
+            fileName = "reporte-$month.pdf",
+        )
+    }
+
     if (showRates) {
         RatesSettingsScreen(
             activeVesReference = activeVesReference,
@@ -365,6 +399,7 @@ fun FinanzasRoot(
                     onOpenCurrencies = { showCurrencies = true },
                     onOpenRates = { showRates = true },
                     onExportCsv = { exportCsv() },
+                    onExportPdf = { exportPdf() },
                     onClearMovements = { vm.clearAllMovements() },
                     onLogout = onLogout,
                 )
@@ -440,6 +475,12 @@ fun FinanzasRoot(
                 baseCurrency = state.baseCurrency,
                 secondaryCurrency = state.secondaryCurrency,
                 onAmount = { id, minor -> vm.updateReceiptAmount(id, minor) },
+                onStartBreakdown = { vm.startReceiptBreakdown(it) },
+                onAddPart = { vm.addReceiptPart(it) },
+                onPartAmount = { id, partId, minor ->
+                    vm.updateReceiptPart(id, partId, minor)
+                },
+                onRemovePart = { id, partId -> vm.removeReceiptPart(id, partId) },
                 onMerchant = { id, text -> vm.updateReceiptMerchant(id, text) },
                 onCurrency = { id, code -> vm.updateReceiptCurrency(id, code) },
                 onCategory = { id, categoryId -> vm.updateReceiptCategory(id, categoryId) },

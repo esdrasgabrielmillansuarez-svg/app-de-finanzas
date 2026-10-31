@@ -173,4 +173,121 @@ class ReceiptBatchTest {
         assertTrue(draft().ownsTemporaryFile)
         assertFalse(draft().copy(source = ReceiptSource.GALLERY).ownsTemporaryFile)
     }
+
+    @Test
+    fun `el desglose empieza con el total leido y suma sus lineas`() {
+        val ready = draft().withAnalysis(
+            analysis = analysis(totalMinor = 150_000L),
+            baseCurrency = "VES",
+            secondaryCurrency = "USD",
+            categories = categories,
+            now = now,
+            zone = zone,
+        )
+
+        val breakdown = ready.withBreakdown()
+        assertEquals(1, breakdown.parts.size)
+        assertEquals(150_000L, breakdown.totalMinor)
+
+        val first = breakdown.parts.first().id
+        val edited = breakdown.withPartAmount(first, 120_000L)
+        val withSecond = edited.withPartAdded()
+        val total = withSecond.withPartAmount(withSecond.parts.last().id, 30_000L)
+
+        assertEquals(2, total.parts.size)
+        assertEquals(150_000L, total.totalMinor)
+        assertTrue(total.hasRequiredData)
+    }
+
+    @Test
+    fun `agregar montos es acumulativo y recalcula el total`() {
+        val ready = draft().withAnalysis(
+            analysis = analysis(totalMinor = null),
+            baseCurrency = "VES",
+            secondaryCurrency = "USD",
+            categories = categories,
+            now = now,
+            zone = zone,
+        ).withBreakdown()
+        val first = ready.parts.first().id
+        val secondDraft = ready.withPartAmount(first, 45_000L).withPartAdded()
+        val second = secondDraft.parts.last().id
+        val both = secondDraft.withPartAmount(second, 55_000L)
+
+        assertEquals(100_000L, both.totalMinor)
+    }
+
+    @Test
+    fun `un monto negativo cuenta como cero`() {
+        val ready = draft().withBreakdown()
+        val id = ready.parts.first().id
+
+        assertEquals(0L, ready.withPartAmount(id, -500L).parts.first().amountMinor)
+        assertEquals(0L, ready.withPartAmount(id, null).parts.first().amountMinor)
+    }
+
+    @Test
+    fun `un desglose en cero no habilita el guardado`() {
+        val analyzed = draft().withAnalysis(
+            analysis = analysis(totalMinor = 150_000L),
+            baseCurrency = "VES",
+            secondaryCurrency = "USD",
+            categories = categories,
+            now = now,
+            zone = zone,
+        )
+        val empty = analyzed.withBreakdown().let { it.withPartAmount(it.parts.first().id, 0L) }
+
+        assertNull(empty.totalMinor)
+        assertFalse(empty.hasRequiredData)
+        assertTrue(draftsToSave(listOf(empty)).isEmpty())
+    }
+
+    @Test
+    fun `quitar todas las lineas vuelve al importe unico`() {
+        val ready = draft().withAnalysis(
+            analysis = analysis(totalMinor = 150_000L),
+            baseCurrency = "VES",
+            secondaryCurrency = "USD",
+            categories = categories,
+            now = now,
+            zone = zone,
+        )
+        val breakdown = ready.withBreakdown()
+        val cleared = breakdown.withoutPart(breakdown.parts.first().id)
+
+        assertTrue(cleared.parts.isEmpty())
+        assertEquals(150_000L, cleared.totalMinor)
+    }
+
+    @Test
+    fun `el desglose respeta el tope de lineas`() {
+        var breakdown = draft().withBreakdown()
+        repeat(MAX_RECEIPT_PARTS + 5) { breakdown = breakdown.withPartAdded() }
+
+        assertEquals(MAX_RECEIPT_PARTS, breakdown.parts.size)
+    }
+
+    @Test
+    fun `reanalizar la factura descarta el desglose anterior`() {
+        val ready = draft().withAnalysis(
+            analysis = analysis(totalMinor = 150_000L),
+            baseCurrency = "VES",
+            secondaryCurrency = "USD",
+            categories = categories,
+            now = now,
+            zone = zone,
+        )
+        val reanalyzed = ready.withBreakdown().withAnalysis(
+            analysis = analysis(totalMinor = 200_000L),
+            baseCurrency = "VES",
+            secondaryCurrency = "USD",
+            categories = categories,
+            now = now,
+            zone = zone,
+        )
+
+        assertTrue(reanalyzed.parts.isEmpty())
+        assertEquals(200_000L, reanalyzed.totalMinor)
+    }
 }

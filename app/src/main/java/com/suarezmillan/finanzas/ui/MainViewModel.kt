@@ -19,6 +19,10 @@ import com.suarezmillan.finanzas.core.receipt.ReceiptStatus
 import com.suarezmillan.finanzas.core.receipt.draftsToSave
 import com.suarezmillan.finanzas.core.receipt.newReceiptDraft
 import com.suarezmillan.finanzas.core.receipt.withAnalysis
+import com.suarezmillan.finanzas.core.receipt.withBreakdown
+import com.suarezmillan.finanzas.core.receipt.withPartAdded
+import com.suarezmillan.finanzas.core.receipt.withPartAmount
+import com.suarezmillan.finanzas.core.receipt.withoutPart
 import com.suarezmillan.finanzas.core.reminder.ReminderScheduler
 import com.suarezmillan.finanzas.core.settings.AppSettings
 import com.suarezmillan.finanzas.core.settings.ThemeMode
@@ -615,6 +619,17 @@ class MainViewModel @Inject constructor(
     fun updateReceiptAmount(id: String, amountMinor: Long?) =
         updateReceipt(id) { it.copy(amountMinor = amountMinor) }
 
+    /** Activa el desglose de la factura conservando el total leído como primera línea. */
+    fun startReceiptBreakdown(id: String) = updateReceipt(id) { it.withBreakdown() }
+
+    fun addReceiptPart(id: String) = updateReceipt(id) { it.withPartAdded() }
+
+    fun updateReceiptPart(id: String, partId: String, amountMinor: Long?) =
+        updateReceipt(id) { it.withPartAmount(partId, amountMinor) }
+
+    fun removeReceiptPart(id: String, partId: String) =
+        updateReceipt(id) { it.withoutPart(partId) }
+
     fun updateReceiptCurrency(id: String, currency: String) =
         updateReceipt(id) { it.copy(currency = currency) }
 
@@ -650,7 +665,7 @@ class MainViewModel @Inject constructor(
                 val saved = ready.map { draft ->
                     buildTxn(
                         type = TxnType.EXPENSE,
-                        amountMinor = draft.amountMinor ?: 0L,
+                        amountMinor = draft.totalMinor ?: 0L,
                         currency = draft.currency,
                         categoryId = draft.categoryId,
                         merchant = draft.merchant?.trim()?.takeIf { it.isNotBlank() },
@@ -681,6 +696,9 @@ class MainViewModel @Inject constructor(
     fun clearLastBatch() {
         _lastBatch.value = emptyList()
     }
+
+    /** Tasa actual entre dos divisas, para el reporte PDF (no inventa tasas). */
+    fun rateBetween(from: String, to: String): Double? = rates.rate(from, to)
 
     /** Las fotos de cámara viven en `cacheDir`: se borran al guardar o descartar. */
     private fun deleteTemporaryImage(draft: ReceiptDraft) {

@@ -55,6 +55,7 @@ fun SettingsScreen(
     onOpenCurrencies: () -> Unit,
     onOpenRates: () -> Unit,
     onExportCsv: () -> Unit,
+    onExportPdf: () -> Unit,
     onClearMovements: () -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -212,6 +213,16 @@ fun SettingsScreen(
                 TextButton(onClick = onExportCsv, modifier = Modifier.padding(top = 6.dp)) {
                     Text("Exportar movimientos (CSV)")
                 }
+                TextButton(onClick = onExportPdf, modifier = Modifier.padding(top = 2.dp)) {
+                    Text("Generar reporte PDF del mes")
+                }
+                Text(
+                    "El PDF incluye el resumen del mes, los movimientos y el estado de " +
+                        "los sobres. Se comparte con el selector del sistema, igual que el CSV.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
                 TextButton(onClick = { confirmClear = true }, modifier = Modifier.padding(top = 2.dp)) {
                     Text(
                         "Borrar todos los movimientos",
@@ -222,8 +233,8 @@ fun SettingsScreen(
                 Text(
                     "La app solo se conecta para traer referencias públicas de cambio " +
                         "(BCV, paralelo, EUR, ARS y tabla global). Movimientos, facturas y " +
-                        "perfil nunca salen del teléfono. El CSV se comparte solo cuando tú " +
-                        "eliges el destino.",
+                        "perfil nunca salen del teléfono. El CSV y el PDF se comparten solo " +
+                        "cuando tú eliges el destino.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),

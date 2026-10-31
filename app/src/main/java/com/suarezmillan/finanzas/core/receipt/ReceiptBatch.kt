@@ -2,6 +2,7 @@ package com.suarezmillan.finanzas.core.receipt
 
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.UUID
 
 /** De dónde salió la foto: define si hay que borrar el archivo temporal al descartar. */
 enum class ReceiptSource { CAMERA, GALLERY }
@@ -19,6 +20,17 @@ enum class ReceiptStatus {
 
 /** Categoría de gasto que el usuario ya tiene, para sugerir la del OCR. */
 data class ReceiptCategory(val id: String, val name: String)
+
+/**
+ * Un importe del desglose de una factura (una línea del ticket).
+ *
+ * [id] es estable para que la UI conserve el texto que se está tecleando aunque
+ * se quite otro importe de la lista.
+ */
+data class ReceiptPart(
+    val id: String,
+    val amountMinor: Long = 0L,
+)
 
 /**
  * Una factura dentro de la bandeja de carga masiva.
@@ -39,17 +51,30 @@ data class ReceiptDraft(
     val merchant: String? = null,
     val categoryId: String? = null,
     val occurredAt: Long = 0L,
+    /**
+     * Desglose opcional de la factura. Si está vacío se usa [amountMinor]; si
+     * tiene líneas, el total es su suma. Así una factura con varios conceptos
+     * se guarda como **un solo gasto** con el total correcto.
+     */
+    val parts: List<ReceiptPart> = emptyList(),
     /** El usuario lo quiere incluir en el guardado masivo. */
     val include: Boolean = true,
     val confidence: Float = 0f,
     val warnings: List<String> = emptyList(),
     val error: String? = null,
 ) {
-    /** Datos mínimos para crear el gasto: importe positivo y categoría. */
+    /** Total de la factura: la suma del desglose o el importe leído por el OCR. */
+    val totalMinor: Long?
+        get() = if (parts.isEmpty()) {
+            amountMinor
+        } else {
+            parts.sumOf { it.amountMinor }.takeIf { it > 0L }
+        }
+
+    /** Datos mínimos para crear el gasto: total positivo y categoría. */
     val hasRequiredData: Boolean
         get() = status == ReceiptStatus.READY &&
-            amountMinor != null &&
-            amountMinor > 0L &&
+            (totalMinor ?: 0L) > 0L &&
             categoryId != null
 
     /** Lo que realmente se guardará al confirmar la bandeja. */
@@ -112,6 +137,8 @@ fun ReceiptDraft.withAnalysis(
 ): ReceiptDraft = copy(
     status = ReceiptStatus.READY,
     amountMinor = analysis.totalMinor,
+    // El OCR propone un total único; si el usuario luego desglosa, manda el desglose.
+    parts = emptyList(),
     currency = receiptCurrency(analysis.currency, baseCurrency, secondaryCurrency),
     merchant = analysis.merchant?.trim()?.take(40)?.takeIf { it.isNotBlank() },
     categoryId = suggestCategory(analysis.categoryHint, categories),
@@ -127,6 +154,39 @@ fun suggestCategory(hint: CategoryHint?, categories: List<ReceiptCategory>): Str
     val wanted = hint ?: return null
     return categories.firstOrNull { wanted.matches(it.name) }?.id
 }
+
+/** Tope del desglose: un ticket real no tiene cientos de líneas. */
+const val MAX_RECEIPT_PARTS = 20
+
+/**
+ * Activa el desglose conservando el total leído por el OCR como primera línea.
+ * Si no había total, empieza con una línea vacía.
+ */
+fun ReceiptDraft.withBreakdown(): ReceiptDraft =
+    if (parts.isNotEmpty()) {
+        this
+    } else {
+        copy(parts = listOf(ReceiptPart(UUID.randomUUID().toString(), amountMinor ?: 0L)))
+    }
+
+/** Añade una línea vacía al desglose (hasta [MAX_RECEIPT_PARTS]). */
+fun ReceiptDraft.withPartAdded(): ReceiptDraft =
+    if (parts.size >= MAX_RECEIPT_PARTS) {
+        this
+    } else {
+        copy(parts = parts + ReceiptPart(UUID.randomUUID().toString()))
+    }
+
+/** Cambia el importe de una línea. Un valor nulo o negativo cuenta como cero. */
+fun ReceiptDraft.withPartAmount(partId: String, amountMinor: Long?): ReceiptDraft = copy(
+    parts = parts.map { part ->
+        if (part.id == partId) part.copy(amountMinor = amountMinor?.coerceAtLeast(0L) ?: 0L) else part
+    },
+)
+
+/** Quita una línea del desglose. Sin líneas, vuelve a mandar [amountMinor]. */
+fun ReceiptDraft.withoutPart(partId: String): ReceiptDraft =
+    copy(parts = parts.filterNot { it.id == partId })
 
 /** Borradores que se guardarán al pulsar "Guardar N gastos". */
 fun draftsToSave(drafts: List<ReceiptDraft>): List<ReceiptDraft> = drafts.filter { it.willSave }

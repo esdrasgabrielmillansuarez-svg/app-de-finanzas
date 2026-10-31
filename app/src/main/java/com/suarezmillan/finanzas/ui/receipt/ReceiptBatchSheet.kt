@@ -16,9 +16,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.PhotoLibrary
+import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -48,7 +50,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.suarezmillan.finanzas.core.money.MoneyFormat
+import com.suarezmillan.finanzas.core.receipt.MAX_RECEIPT_PARTS
 import com.suarezmillan.finanzas.core.receipt.ReceiptDraft
+import com.suarezmillan.finanzas.core.receipt.ReceiptPart
 import com.suarezmillan.finanzas.core.receipt.ReceiptSource
 import com.suarezmillan.finanzas.core.receipt.ReceiptStatus
 import com.suarezmillan.finanzas.core.receipt.draftsScanning
@@ -69,6 +73,10 @@ fun ReceiptBatchSheet(
     baseCurrency: String,
     secondaryCurrency: String,
     onAmount: (String, Long?) -> Unit,
+    onStartBreakdown: (String) -> Unit,
+    onAddPart: (String) -> Unit,
+    onPartAmount: (String, String, Long?) -> Unit,
+    onRemovePart: (String, String) -> Unit,
     onMerchant: (String, String) -> Unit,
     onCurrency: (String, String) -> Unit,
     onCategory: (String, String) -> Unit,
@@ -145,6 +153,10 @@ fun ReceiptBatchSheet(
                         baseCurrency = baseCurrency,
                         secondaryCurrency = secondaryCurrency,
                         onAmount = onAmount,
+                        onStartBreakdown = onStartBreakdown,
+                        onAddPart = onAddPart,
+                        onPartAmount = onPartAmount,
+                        onRemovePart = onRemovePart,
                         onMerchant = onMerchant,
                         onCurrency = onCurrency,
                         onCategory = onCategory,
@@ -220,6 +232,10 @@ private fun DraftCard(
     baseCurrency: String,
     secondaryCurrency: String,
     onAmount: (String, Long?) -> Unit,
+    onStartBreakdown: (String) -> Unit,
+    onAddPart: (String) -> Unit,
+    onPartAmount: (String, String, Long?) -> Unit,
+    onRemovePart: (String, String) -> Unit,
     onMerchant: (String, String) -> Unit,
     onCurrency: (String, String) -> Unit,
     onCategory: (String, String) -> Unit,
@@ -302,23 +318,84 @@ private fun DraftCard(
                 )
 
                 ReceiptStatus.READY -> {
-                    OutlinedTextField(
-                        value = amountText,
-                        onValueChange = { raw ->
-                            val clean = raw
-                                .filter { it.isDigit() || it == ',' || it == '.' || it in "+-*/" }
-                                .take(14)
-                            amountText = clean
-                            amountTouched = true
-                            onAmount(draft.id, AmountParser.evaluateToMinor(clean))
-                        },
-                        label = { Text("Importe (${draft.currency})") },
-                        singleLine = true,
-                        isError = amountTouched && draft.amountMinor == null,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.small,
-                    )
+                    if (draft.parts.isEmpty()) {
+                        OutlinedTextField(
+                            value = amountText,
+                            onValueChange = { raw ->
+                                val clean = raw
+                                    .filter { it.isDigit() || it == ',' || it == '.' || it in "+-*/" }
+                                    .take(14)
+                                amountText = clean
+                                amountTouched = true
+                                onAmount(draft.id, AmountParser.evaluateToMinor(clean))
+                            },
+                            label = { Text("Importe (${draft.currency})") },
+                            singleLine = true,
+                            isError = amountTouched && draft.amountMinor == null,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.small,
+                        )
+                        TextButton(onClick = { onStartBreakdown(draft.id) }) {
+                            Icon(
+                                Icons.Rounded.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("Sumar varios montos")
+                        }
+                    } else {
+                        Text(
+                            text = "Montos de la factura",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        draft.parts.forEachIndexed { partIndex, part ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                PartAmountField(
+                                    part = part,
+                                    currency = draft.currency,
+                                    index = partIndex,
+                                    onValue = { onPartAmount(draft.id, part.id, it) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                                IconButton(onClick = { onRemovePart(draft.id, part.id) }) {
+                                    Icon(
+                                        Icons.Rounded.RemoveCircleOutline,
+                                        contentDescription = "Quitar monto",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            TextButton(
+                                onClick = { onAddPart(draft.id) },
+                                enabled = draft.parts.size < MAX_RECEIPT_PARTS,
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text("Añadir monto")
+                            }
+                            Text(
+                                text = "Total " + (
+                                    draft.totalMinor?.let { MoneyFormat.format(it, draft.currency) }
+                                        ?: "—"
+                                    ),
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                        }
+                    }
 
                     Spacer(Modifier.height(8.dp))
 
@@ -412,4 +489,42 @@ private fun DraftCard(
             },
         )
     }
+}
+
+/**
+ * Campo de un importe del desglose. Guarda su texto por [part.id] para que al
+ * añadir o quitar otra línea no se pierda lo que se está tecleando.
+ */
+@Composable
+private fun PartAmountField(
+    part: ReceiptPart,
+    currency: String,
+    index: Int,
+    onValue: (Long?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    fun display(minor: Long): String =
+        minor.takeIf { it > 0L }?.let { MoneyFormat.editInput(it) }.orEmpty()
+
+    var text by rememberSaveable(part.id) { mutableStateOf(display(part.amountMinor)) }
+    LaunchedEffect(part.amountMinor) {
+        // Solo rellena si el texto actual ya no representa este importe.
+        if (AmountParser.evaluateToMinor(text) != part.amountMinor) {
+            text = display(part.amountMinor)
+        }
+    }
+
+    OutlinedTextField(
+        value = text,
+        onValueChange = { raw ->
+            val clean = raw.filter { it.isDigit() || it == ',' || it == '.' }.take(14)
+            text = clean
+            onValue(AmountParser.evaluateToMinor(clean))
+        },
+        label = { Text("Monto ${index + 1} ($currency)") },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        modifier = modifier,
+        shape = MaterialTheme.shapes.small,
+    )
 }

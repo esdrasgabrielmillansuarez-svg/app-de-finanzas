@@ -21,7 +21,7 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
 
 ```bash
 ./gradlew :app:assembleDebug
-./gradlew :app:testDebugUnitTest    # importes, divisas, parser de facturas, auth, CSV
+./gradlew :app:testDebugUnitTest    # importes, divisas, facturas, reporte mensual, auth, CSV
 ```
 
 > El repo incluye wrapper de Gradle 8.9. En esta máquina el build se hizo con un
@@ -61,6 +61,8 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
   divisa y categoría sugeridos, todo editable. El OCR **nunca guarda solo**;
   “Guardar N gastos” crea la tanda completa y el snackbar permite **Deshacer**.
   Las fotos de cámara viven en el caché y se borran al guardar o descartar.
+  Cada factura puede **sumar varios montos** (líneas del ticket): el total se
+  recalcula en vivo y se guarda como **un solo gasto**.
 - Guardado con **Deshacer** en el snackbar.
 
 **Movimientos**
@@ -92,6 +94,10 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
   o USDT) y fijar a mano la equivalencia de cada referencia, del euro y del peso
   argentino; la manual siempre gana y se puede quitar.
 - **Exportar movimientos (CSV)** por el selector del sistema (FileProvider).
+- **Generar reporte PDF del mes**: resumen (ingresos, gastos, balance), tabla de
+  movimientos y estado de sobres. Cada movimiento usa su tasa histórica; si
+  falta una tasa, el importe no se suma y el PDF lo avisa. Se comparte con el
+  selector del sistema, sin subir nada.
 - **Borrar todos los movimientos** con confirmación.
 - **Acerca de**: creador y versión visibles.
 - Seguridad local: contraseña PBKDF2; sin bloqueo biométrico.
@@ -132,7 +138,8 @@ app/src/main/java/com/suarezmillan/finanzas/
 │   ├── money/Money.kt          # unidades menores + formato es-AR
 │   ├── currency/               # catálogo (~56) + tasas (USD pivot) + referencias remotas
 │   ├── receipt/                # ReceiptParser (heurística) + ReceiptScanner (ML Kit)
-│   ├── export/                 # CsvExporter + shareCsv (FileProvider)
+│   ├── export/                 # CsvExporter + shareCsv + PDF mensual (FileProvider)
+│   ├── report/                 # MonthlyReport: resumen y filas del mes (JVM puro)
 │   ├── reminder/               # WorkManager diario + notificación de vencimientos
 │   ├── fx/Fx.kt                # FxRate, FxSource, conversión
 │   └── settings/               # AppSettings + PreferenceStore (JVM testeable)
@@ -176,6 +183,9 @@ app/src/main/java/com/suarezmillan/finanzas/
 | Cámara propia (CameraX) en vez de la app del sistema | Para cargar varias facturas seguidas sin salir y volver; la foto queda en el caché de la app. |
 | OCR en cola de a una foto | Diez bitmaps a la vez en un teléfono modesto terminan en `OutOfMemoryError`. |
 | Bandeja de facturas editable antes de guardar | El OCR propone; el usuario confirma. Nunca se crea un movimiento sin revisión. |
+| Desglose por factura que suma al total | Un ticket con varios conceptos se guarda como un solo gasto; se evita duplicar movimientos. |
+| PDF con `PdfDocument`, sin librerías nuevas | Genera el reporte offline y el APK no crece con un motor de PDF. |
+| El reporte usa la tasa histórica de cada fila | El PDF cuenta lo que pasó, no lo que vale hoy la divisa. |
 | El tema cambia **acento y superficies**, nunca el significado | USD sigue ámbar y la moneda local sigue cian: el color no deja de informar. |
 | Mensajes del coach deterministas y contextuales | Sin nube, sin IA impredecible y testeables; prioridad explícita por reglas. |
 | Recordatorios con WorkManager, no `AlarmManager` | No hace falta precisión al minuto ni permisos de alarmas exactas. |
@@ -193,7 +203,10 @@ app/src/main/java/com/suarezmillan/finanzas/
   en vivo, ausencia de tasas inventadas y formato de tasas.
 - `ReceiptParserTest` — extracción de importe/comercio/categoría en tickets.
 - `ReceiptBatchTest` — bandeja de facturas: divisa/fecha aceptadas, categoría
-  solo si coincide con una del usuario y qué se guarda al confirmar.
+  solo si coincide con una del usuario, desglose que suma al total y qué se
+  guarda al confirmar.
+- `MonthlyReportTest` — totales del mes, traspasos fuera de ingresos/gastos,
+  tasa histórica, falta de tasa y estado de sobres.
 - `PasswordHasherTest` — hash/verificación, sal distinta, no reversible.
 - `AuthValidationTest` — nombre, correo normalizado, contraseña mínima.
 - `CsvExporterTest` — cabecera, decimales y escapado RFC 4180.
@@ -226,7 +239,7 @@ app/src/main/java/com/suarezmillan/finanzas/
 
 ## Versiones
 
-Versión de la app: **0.7.0** (`versionCode 6`).
+Versión de la app: **0.8.0** (`versionCode 7`).
 
 Fijadas a un set conservador y mutuamente compatible: Kotlin 2.0.21, AGP 8.7.3,
 Gradle 8.9, Compose BOM 2024.10.01, Room 2.6.1, Hilt 2.52, KSP 2.0.21-1.0.28,
