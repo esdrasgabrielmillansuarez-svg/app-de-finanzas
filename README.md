@@ -51,6 +51,17 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
 - **Sticker contextual**: emoji + frase que cambia según vencimientos, sobres al
   límite, presupuesto y hábito. Botón "Otro" para rotar variantes.
 - Pill de tasa → pantalla de divisas.
+- Acceso directo a la **calculadora de cambio** con la tasa del día.
+
+**Calculadora de cambio**
+- Pantalla de consulta **USD ↔ VES**: se intercambia el sentido con un toque y
+  se elige la referencia del dólar (BCV, paralelo o USDT) sin salir.
+- Usa la **misma tasa activa** que el resto de la app (manual > en vivo) y
+  muestra la fuente y cuándo se actualizó.
+- Teclado propio 4×4 con aritmética inline (`12+450`, `1200/2`) y atajos
+  (US$ 1, 5, 10, 20, 50, 100 o Bs. 1.000…100.000).
+- **No crea movimientos ni guarda nada.** Si falta la tasa, avisa "sin tasa" y
+  no inventa una equivalencia.
 
 **Registrar (FAB)**
 - Tipo, divisa, categoría, importe con aritmética inline (`12+450`, `1200/2`).
@@ -136,7 +147,7 @@ app/src/main/java/com/suarezmillan/finanzas/
 │   ├── auth/                   # PasswordHasher (PBKDF2), AuthValidation
 │   ├── coach/CoachEngine.kt    # mensajes/stickers contextuales (JVM puro)
 │   ├── money/Money.kt          # unidades menores + formato es-AR
-│   ├── currency/               # catálogo (~56) + tasas (USD pivot) + referencias remotas
+│   ├── currency/               # catálogo (~56) + tasas + referencias remotas + ExchangeMath
 │   ├── receipt/                # ReceiptParser (heurística) + ReceiptScanner (ML Kit)
 │   ├── export/                 # CsvExporter + shareCsv + PDF mensual (FileProvider)
 │   ├── report/                 # MonthlyReport: resumen y filas del mes (JVM puro)
@@ -159,9 +170,10 @@ app/src/main/java/com/suarezmillan/finanzas/
     ├── FinanzasRoot.kt         # Scaffold, tabs, FAB, hoja de registro, diálogo de detalle
     ├── MainViewModel.kt        # estado único del MVP
     ├── home/                   # Hoy + StickerCard
+    ├── cambio/                 # calculadora de cambio USD ↔ VES
     ├── movs/ plan/ ajustes/ divisas/
     ├── quick/                  # hoja de registro + AmountParser
-    ├── components/             # MoneyText, ConfirmDialog
+    ├── components/             # MoneyText, Keypad, ConfirmDialog
     └── theme/                  # Color, Type, Shape, Motion, Theme
 ```
 
@@ -191,6 +203,8 @@ app/src/main/java/com/suarezmillan/finanzas/
 | Recordatorios con WorkManager, no `AlarmManager` | No hace falta precisión al minuto ni permisos de alarmas exactas. |
 | Sin cuentas, categorías ni tasas de ejemplo | La app muestra solo datos del usuario o referencias reales; si falta una tasa, dice "sin cotización". |
 | Cuenta creada al primer movimiento de cada divisa | Se evita pedir una configuración inicial y nunca se inventa un saldo o una cuenta. |
+| Calculadora de cambio separada del registro | Consultar una equivalencia no debe crear movimientos ni ensuciar el historial. |
+| `ExchangeMath` puro y tasa activa de la app | La conversión se prueba en JVM; la calculadora nunca inventa una tasa ni una equivalencia. |
 
 ## Tests
 
@@ -201,6 +215,8 @@ app/src/main/java/com/suarezmillan/finanzas/
 - `AmountParserTest` — aritmética inline y decimales.
 - `CurrencyRatesTest` — paridad vía USD, referencias BCV/paralelo/USDT, EUR/ARS
   en vivo, ausencia de tasas inventadas y formato de tasas.
+- `ExchangeMathTest` — conversión USD ↔ VES, redondeo al centavo y ausencia de
+  equivalencia cuando falta el monto o la tasa.
 - `ReceiptParserTest` — extracción de importe/comercio/categoría en tickets.
 - `ReceiptBatchTest` — bandeja de facturas: divisa/fecha aceptadas, categoría
   solo si coincide con una del usuario, desglose que suma al total y qué se
@@ -221,7 +237,7 @@ app/src/main/java/com/suarezmillan/finanzas/
 - `HomeUiStateBudgetTest` — disponible como ingresos menos gastos, sin sumar
   límites de sobres.
 
-**97 tests, 0 fallos** en `:app:testDebugUnitTest`.
+**118 tests, 0 fallos** en `:app:testDebugUnitTest`.
 
 ## Qué falta (a propósito)
 
@@ -239,7 +255,7 @@ app/src/main/java/com/suarezmillan/finanzas/
 
 ## Versiones
 
-Versión de la app: **0.8.0** (`versionCode 7`).
+Versión de la app: **0.9.0** (`versionCode 8`).
 
 Fijadas a un set conservador y mutuamente compatible: Kotlin 2.0.21, AGP 8.7.3,
 Gradle 8.9, Compose BOM 2024.10.01, Room 2.6.1, Hilt 2.52, KSP 2.0.21-1.0.28,

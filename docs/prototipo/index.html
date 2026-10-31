@@ -50,6 +50,7 @@
       <li class="nav-item"><button class="nav-link active" type="button" data-screen="home"><i class="bi bi-house-door me-1"></i>Inicio</button></li>
       <li class="nav-item"><button class="nav-link" type="button" data-screen="plan"><i class="bi bi-wallet2 me-1"></i>Plan</button></li>
       <li class="nav-item"><button class="nav-link" type="button" data-screen="divisas"><i class="bi bi-currency-exchange me-1"></i>Divisas</button></li>
+      <li class="nav-item"><button class="nav-link" type="button" data-screen="cambio"><i class="bi bi-calculator me-1"></i>Calculadora</button></li>
       <li class="nav-item"><button class="nav-link" type="button" data-screen="ajustes"><i class="bi bi-sliders me-1"></i>Ajustes</button></li>
     </ul>
     <div class="ms-auto d-none d-md-flex align-items-center gap-2 text-app-muted small">
@@ -175,6 +176,11 @@
                 <span><span class="d-block fw-semibold">Cambiar la tasa</span><span class="small text-app-muted">BCV, paralelo o manual</span></span>
                 <i class="bi bi-chevron-right ms-auto text-app-muted"></i>
               </button>
+              <button class="quick-action" type="button" data-screen="cambio">
+                <span class="icon-bubble gold"><i class="bi bi-calculator"></i></span>
+                <span><span class="d-block fw-semibold">Calculadora de cambio</span><span class="small text-app-muted">dólares y bolívares, sin crear movimientos</span></span>
+                <i class="bi bi-chevron-right ms-auto text-app-muted"></i>
+              </button>
             </div>
           </div>
         </div>
@@ -218,6 +224,107 @@
               <div class="money money-sm text-app-danger">− Bs. 1.500,00</div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ CALCULADORA -->
+  <section class="screen" id="screen-cambio">
+    <div class="row g-4 justify-content-center">
+      <div class="col-lg-8 col-xl-7">
+        <div class="d-flex align-items-center gap-3 mb-4">
+          <span class="icon-bubble gold"><i class="bi bi-calculator"></i></span>
+          <div>
+            <div class="section-label mb-0">Consulta rápida</div>
+            <h2 class="h4 mb-0">Calculadora de cambio</h2>
+          </div>
+          <span class="badge badge-soft rounded-pill ms-auto">No crea movimientos</span>
+        </div>
+
+        <div class="card card-soft mb-4">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+              <div>
+                <div class="section-label">Dólar de hoy</div>
+                <div class="money money-md mt-1">1 USD = 320,50 VES</div>
+                <div class="small text-app-muted mt-1">BCV oficial · actualizado hace 2 h</div>
+              </div>
+              <button class="btn btn-ghost btn-sm" type="button" id="refreshRates2">
+                <i class="bi bi-arrow-repeat me-1"></i>Actualizar
+              </button>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-3">
+              <span class="badge badge-soft rounded-pill">BCV oficial</span>
+              <span class="badge badge-soft rounded-pill">Paralelo: 335,80</span>
+              <span class="badge badge-soft rounded-pill">USDT: 336,10</span>
+            </div>
+            <div class="small text-app-muted mt-3">
+              Cambiar de referencia recalcula la conversión al instante. Si falta la
+              tasa, se muestra <strong>“sin tasa”</strong> y no se inventa una equivalencia.
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-soft mb-4">
+          <div class="card-body">
+            <div class="section-label">Tengo</div>
+            <div class="d-flex align-items-center gap-2">
+              <div class="money money-lg flex-grow-1">US$ 10,00</div>
+              <span class="badge badge-soft rounded-pill px-3 py-2">US$ USD</span>
+            </div>
+            <div class="small text-app-muted">10</div>
+
+            <div class="d-flex align-items-center gap-2 my-3">
+              <hr class="flex-grow-1 opacity-25">
+              <span class="icon-bubble"><i class="bi bi-arrow-down-up"></i></span>
+              <hr class="flex-grow-1 opacity-25">
+            </div>
+
+            <div class="section-label">Recibes</div>
+            <div class="d-flex align-items-center gap-2">
+              <div class="money money-lg flex-grow-1 text-app-teal">Bs. 3.205,00</div>
+              <span class="badge badge-soft rounded-pill px-3 py-2">Bs. VES</span>
+            </div>
+            <div class="small text-app-muted">1 USD = 320,50 VES</div>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="section-label mb-0">Atajos</div>
+          <button class="btn btn-link btn-sm text-app-teal text-decoration-none p-0" type="button" data-demo-action="Monto limpio (demo).">Limpiar</button>
+        </div>
+        <div class="d-flex flex-wrap gap-2 mb-4">
+          <span class="badge badge-soft rounded-pill px-3 py-2">$1</span>
+          <span class="badge badge-soft rounded-pill px-3 py-2">$5</span>
+          <span class="badge rate-pill rounded-pill px-3 py-2">$10</span>
+          <span class="badge badge-soft rounded-pill px-3 py-2">$20</span>
+          <span class="badge badge-soft rounded-pill px-3 py-2">$50</span>
+          <span class="badge badge-soft rounded-pill px-3 py-2">$100</span>
+        </div>
+
+        <div class="row g-2 mb-3">
+          <div class="col-3"><button class="btn btn-ghost w-100 money" type="button" data-demo-action="1 (demo).">1</button></div>
+          <div class="col-3"><button class="btn btn-ghost w-100 money" type="button" data-demo-action="2 (demo).">2</button></div>
+          <div class="col-3"><button class="btn btn-ghost w-100 money" type="button" data-demo-action="3 (demo).">3</button></div>
+          <div class="col-3"><button class="btn btn-app w-100" type="button" data-demo-action="Dividir (demo).">÷</button></div>
+          <div class="col-3"><button class="btn btn-ghost w-100 money" type="button" data-demo-action="4 (demo).">4</button></div>
+          <div class="col-3"><button class="btn btn-ghost w-100 money" type="button" data-demo-action="5 (demo).">5</button></div>
+          <div class="col-3"><button class="btn btn-ghost w-100 money" type="button" data-demo-action="6 (demo).">6</button></div>
+          <div class="col-3"><button class="btn btn-app w-100" type="button" data-demo-action="Multiplicar (demo).">×</button></div>
+          <div class="col-3"><button class="btn btn-ghost w-100 money" type="button" data-demo-action="7 (demo).">7</button></div>
+          <div class="col-3"><button class="btn btn-ghost w-100 money" type="button" data-demo-action="8 (demo).">8</button></div>
+          <div class="col-3"><button class="btn btn-ghost w-100 money" type="button" data-demo-action="9 (demo).">9</button></div>
+          <div class="col-3"><button class="btn btn-app w-100" type="button" data-demo-action="Restar (demo).">−</button></div>
+          <div class="col-3"><button class="btn btn-ghost w-100 money" type="button" data-demo-action="Coma decimal (demo).">,</button></div>
+          <div class="col-3"><button class="btn btn-ghost w-100 money" type="button" data-demo-action="0 (demo).">0</button></div>
+          <div class="col-3"><button class="btn btn-ghost w-100" type="button" data-demo-action="Borrar (demo)."><i class="bi bi-backspace"></i></button></div>
+          <div class="col-3"><button class="btn btn-app w-100" type="button" data-demo-action="Sumar (demo).">+</button></div>
+        </div>
+
+        <div class="small text-app-muted">
+          Solo calcula: no crea movimientos ni guarda nada. La tasa es la misma que
+          ves en el resto de la app.
         </div>
       </div>
     </div>
@@ -588,7 +695,7 @@
             <div>
               <div class="section-label">Creador</div>
               <div class="h5 mb-0">Esdras Millan</div>
-              <div class="small text-app-muted">Finanzas · versión 0.8.0</div>
+              <div class="small text-app-muted">Finanzas · versión 0.9.0</div>
             </div>
             <span class="badge badge-soft rounded-pill ms-auto">Hecho local</span>
           </div>
@@ -690,7 +797,7 @@
         <div class="card card-soft">
           <div class="card-body">
             <div class="section-label mb-2">Acerca de</div>
-            <p class="small text-app-muted mb-1">Finanzas · 0.8.0 · versionCode 7</p>
+            <p class="small text-app-muted mb-1">Finanzas · 0.9.0 · versionCode 8</p>
             <p class="small text-app-muted mb-0">Diseñado y desarrollado por <strong>Esdras Millan</strong>.</p>
           </div>
         </div>

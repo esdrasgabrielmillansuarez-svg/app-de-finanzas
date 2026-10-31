@@ -60,6 +60,7 @@ import com.suarezmillan.finanzas.data.local.entity.CategoryKind
 import com.suarezmillan.finanzas.data.local.entity.TxnEntity
 import com.suarezmillan.finanzas.ui.ajustes.RatesSettingsScreen
 import com.suarezmillan.finanzas.ui.ajustes.SettingsScreen
+import com.suarezmillan.finanzas.ui.cambio.ExchangeCalculatorScreen
 import com.suarezmillan.finanzas.ui.divisas.CurrenciesScreen
 import com.suarezmillan.finanzas.ui.home.HomeScreen
 import com.suarezmillan.finanzas.ui.movs.MovementsScreen
@@ -115,6 +116,7 @@ fun FinanzasRoot(
     var quickOpen by rememberSaveable { mutableStateOf(false) }
     var showCurrencies by rememberSaveable { mutableStateOf(false) }
     var showRates by rememberSaveable { mutableStateOf(false) }
+    var showCalculator by rememberSaveable { mutableStateOf(false) }
     var coachVariant by rememberSaveable { mutableIntStateOf(0) }
     var notificationAsked by rememberSaveable { mutableStateOf(false) }
     var detailTxn by remember { mutableStateOf<TxnEntity?>(null) }
@@ -279,6 +281,20 @@ fun FinanzasRoot(
         )
     }
 
+    if (showCalculator) {
+        ExchangeCalculatorScreen(
+            activeVesReference = activeVesReference,
+            vesReferences = vesReferences,
+            vesManualRates = vesManualRates,
+            refreshState = rateRefresh,
+            rate = vm::rateBetween,
+            onSelectVesReference = { vm.setActiveVesReference(it) },
+            onRefresh = { vm.refreshRates(force = true) },
+            onBack = { showCalculator = false },
+        )
+        return
+    }
+
     if (showRates) {
         RatesSettingsScreen(
             activeVesReference = activeVesReference,
@@ -365,6 +381,7 @@ fun FinanzasRoot(
                     },
                     onOpenPlan = { tab = 2 },
                     onOpenCurrencies = { showCurrencies = true },
+                    onOpenCalculator = { showCalculator = true },
                     onTxnClick = { detailTxn = it },
                 )
                 1 -> MovementsScreen(

@@ -249,6 +249,26 @@ Reglas:
 - Búsqueda por texto + filtros (divisa, cuenta, categoría) como chips, no como menú.
 - Fila: icono · comercio/nota · hora · cuenta · monto (con signo, tabular).
 
+### 5.7 Calculadora de cambio
+
+Pantalla de consulta, no de registro. Se abre desde una tarjeta en Hoy y mantiene
+el par fijo **USD ↔ VES**:
+
+1. **Tasa de hoy.** Referencia activa con su fuente y antigüedad
+   (`BCV · actualizado hace 2 h`), botón *Actualizar* y chips BCV / Paralelo /
+   USDT. Cambiar de referencia recalcula la conversión en vivo.
+2. **Conversor.** "Tengo" y "Recibes" con el monto en `displayS`; el botón
+   central intercambia el sentido sin borrar el importe.
+3. **Atajos.** US$ 1, 5, 10, 20, 50, 100 o Bs. 1.000…100.000 según el sentido.
+4. **Teclado 4×4** compartido con Registrar (aritmética inline, sin teclado del
+   sistema).
+5. **Aviso de honestidad.** Sin tasa no hay resultado: se muestra "sin tasa: no
+   se inventa una equivalencia" y se invita a actualizar o fijarla a mano.
+
+La pantalla no crea movimientos, no toca el historial y no guarda el monto
+consultado. Usa `ExchangeMath` (JVM puro) sobre la tasa que ya resuelve
+`CurrencyRates` (manual > en vivo).
+
 ---
 
 ## 6. Bimoneda: las cinco reglas que evitan el desastre
@@ -369,6 +389,9 @@ Alineado con este documento:
   salida desde Ajustes. Sin servidor; `INTERNET` se usa solo para referencias
   públicas de cambio.
 - Hoja de registro con teclado 4×4, aritmética inline (`12+450`), chips de categoría, divisa por chip y deshacer.
+- **Calculadora de cambio** USD ↔ VES con el mismo teclado, atajos, selector
+  BCV/paralelo/USDT y aviso explícito cuando falta la tasa. Solo consulta: no
+  crea movimientos.
 - Hoy (saldo por divisa, "te queda este mes", proyección estimada), Movimientos con búsqueda y filtros de tipo/divisa, Plan (sobres + pagos programados) y Ajustes.
 - Detalle de movimiento (duplicar / eliminar con deshacer) desde Hoy y Movimientos.
 - Divisas: catálogo de ~56 monedas agrupadas por país/región, equivalencia en USD y EUR, base/secundaria y tasa manual por divisa.

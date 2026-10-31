@@ -26,7 +26,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -44,7 +43,9 @@ import com.suarezmillan.finanzas.core.money.MoneyFormat
 import com.suarezmillan.finanzas.data.local.entity.CategoryKind
 import com.suarezmillan.finanzas.data.local.entity.TxnType
 import com.suarezmillan.finanzas.ui.HomeUiState
+import com.suarezmillan.finanzas.ui.components.AmountKeypad
 import com.suarezmillan.finanzas.ui.components.CategoryDialog
+import com.suarezmillan.finanzas.ui.components.applyAmountKey
 
 /**
  * Hoja de registro rápido: tipo, divisa, importe, categoría y factura, en una
@@ -92,16 +93,7 @@ fun QuickEntrySheet(
     // El OCR ya no rellena el formulario: la bandeja de facturas se revisa aparte.
     val amountMinor = AmountParser.evaluateToMinor(expression)
 
-    val press: (String) -> Unit = { key ->
-        expression = when (key) {
-            "⌫" -> expression.dropLast(1)
-            "÷" -> appendOperator(expression, "/")
-            "×" -> appendOperator(expression, "*")
-            "−" -> appendOperator(expression, "-")
-            "+" -> appendOperator(expression, "+")
-            else -> if (expression.length >= 14) expression else expression + key
-        }
-    }
+    val press: (String) -> Unit = { key -> expression = applyAmountKey(expression, key) }
 
     Column(
         modifier = Modifier
@@ -267,7 +259,7 @@ fun QuickEntrySheet(
 
         Spacer(Modifier.height(14.dp))
 
-        Keypad(onKey = press)
+        AmountKeypad(onKey = press)
 
         Spacer(Modifier.height(10.dp))
 
@@ -314,53 +306,4 @@ private fun CurrencyChip(currency: String, selected: Boolean, onClick: () -> Uni
         onClick = onClick,
         label = { Text(currency) },
     )
-}
-
-/** 4×4, teclas de 50 dp: el pulgar llega a todo con una mano. */
-@Composable
-private fun Keypad(onKey: (String) -> Unit) {
-    val rows = listOf(
-        listOf("1", "2", "3", "÷"),
-        listOf("4", "5", "6", "×"),
-        listOf("7", "8", "9", "−"),
-        listOf(",", "0", "⌫", "+"),
-    )
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        rows.forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { key ->
-                    val isDigit = key.first().isDigit() || key == ","
-                    Surface(
-                        onClick = { onKey(key) },
-                        shape = MaterialTheme.shapes.medium,
-                        color = if (isDigit) {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.primaryContainer
-                        },
-                        modifier = Modifier.weight(1f).height(50.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = key,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = if (isDigit) {
-                                    MaterialTheme.colorScheme.onSurface
-                                } else {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun appendOperator(expression: String, op: String): String = when {
-    expression.isEmpty() -> if (op == "-") op else expression
-    expression.last() in "+-*/" -> expression.dropLast(1) + op
-    else -> expression + op
 }
