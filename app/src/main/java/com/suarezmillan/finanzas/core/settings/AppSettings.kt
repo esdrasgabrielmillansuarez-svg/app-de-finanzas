@@ -228,6 +228,19 @@ class AppSettings @Inject constructor(
         store.putBoolean(KEY_REMINDERS, enabled)
     }
 
+    // ------------------------------------------------------------------ tutorial
+
+    /**
+     * El tutorial de bienvenida se recuerda por perfil local, no por teléfono:
+     * si alguien más crea su cuenta, también ve la introducción.
+     */
+    fun hasSeenOnboarding(userKey: String): Boolean =
+        userKey.isNotBlank() && store.getBoolean(onboardingKey(userKey), false)
+
+    fun markOnboardingSeen(userKey: String) {
+        if (userKey.isNotBlank()) store.putBoolean(onboardingKey(userKey), true)
+    }
+
     // ------------------------------------------------------------------ carga
 
     private fun loadVesReferences(): Map<VesReference, LiveRate> = buildMap {
@@ -303,6 +316,8 @@ class AppSettings @Inject constructor(
     private fun vesAtKey(reference: VesReference) = "ves_ref_${reference.id}_at"
     private fun vesSourceKey(reference: VesReference) = "ves_ref_${reference.id}_source"
     private fun vesManualKey(reference: VesReference) = "ves_manual_${reference.id}"
+
+    private fun onboardingKey(userKey: String) = "onboarding_seen_$userKey"
 
     private fun liveValueKey(code: String) = "live_${code}_value"
     private fun liveAtKey(code: String) = "live_${code}_at"

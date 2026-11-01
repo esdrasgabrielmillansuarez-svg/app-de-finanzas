@@ -56,6 +56,7 @@ fun SettingsScreen(
     onOpenRates: () -> Unit,
     onExportCsv: () -> Unit,
     onExportPdf: () -> Unit,
+    onShowTutorial: () -> Unit,
     onClearMovements: () -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -252,6 +253,21 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
                 )
+            }
+        }
+
+        item {
+            Section("Ayuda") {
+                Text("Tutorial de bienvenida", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Privacidad, registro rápido, bimoneda y plan, en cuatro pasos.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                TextButton(onClick = onShowTutorial, modifier = Modifier.padding(top = 4.dp)) {
+                    Text("Ver tutorial")
+                }
             }
         }
 

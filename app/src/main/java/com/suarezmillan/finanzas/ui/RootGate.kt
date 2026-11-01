@@ -1,6 +1,7 @@
 package com.suarezmillan.finanzas.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -9,6 +10,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,6 +21,8 @@ import com.suarezmillan.finanzas.core.branding.Branding
 import com.suarezmillan.finanzas.data.repo.AuthSession
 import com.suarezmillan.finanzas.ui.auth.AuthScreen
 import com.suarezmillan.finanzas.ui.auth.AuthViewModel
+import com.suarezmillan.finanzas.ui.onboarding.OnboardingScreen
+import com.suarezmillan.finanzas.ui.onboarding.OnboardingViewModel
 
 /**
  * Puerta de entrada: mientras se lee el perfil guardado muestra un splash
@@ -43,11 +47,28 @@ fun RootGate(authVm: AuthViewModel = hiltViewModel()) {
             onClearError = authVm::clearError,
         )
 
-        is AuthSession.LoggedIn -> FinanzasRoot(
-            userName = current.user.name,
-            userEmail = current.user.email,
-            onLogout = { authVm.logout() },
-        )
+        is AuthSession.LoggedIn -> {
+            val onboardingVm: OnboardingViewModel = hiltViewModel()
+            val showOnboarding by onboardingVm.visible.collectAsStateWithLifecycle()
+
+            LaunchedEffect(current.user.id) {
+                onboardingVm.sync(current.user.id)
+            }
+
+            Box(Modifier.fillMaxSize()) {
+                FinanzasRoot(
+                    userName = current.user.name,
+                    userEmail = current.user.email,
+                    onLogout = { authVm.logout() },
+                    onShowTutorial = onboardingVm::show,
+                )
+                if (showOnboarding) {
+                    OnboardingScreen(
+                        onFinish = { onboardingVm.dismiss(current.user.id) },
+                    )
+                }
+            }
+        }
     }
 }
 

@@ -39,6 +39,22 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
   categorías. La primera cuenta de una divisa se crea cuando guardas un
   movimiento en esa divisa; las categorías las creas tú desde Registrar o Plan.
 
+## Tutorial de bienvenida
+
+La primera vez que un perfil entra a la app se muestra un tutorial de **cuatro
+pasos**, prescindible con **Saltar**:
+
+1. **Privacidad offline**: los datos viven en el teléfono y la contraseña se
+   guarda con hash.
+2. **Registro rápido y facturas**: el botón `+`, el deshacer y el OCR local.
+3. **Bimoneda y calculadora**: referencia del dólar, tasa manual y conversión
+   USD ↔ VES sin crear movimientos.
+4. **Plan y control**: sobres, pagos, recordatorios y exportación CSV/PDF.
+
+Se marca **por perfil local** (`onboarding_seen_<userId>`), no por teléfono: si
+otra persona crea su cuenta, también ve la introducción. No usa cifras ni tasas
+de ejemplo y se puede repetir desde **Ajustes → Ayuda → Ver tutorial**.
+
 ## Qué funciona hoy
 
 **Hoy**
@@ -110,6 +126,7 @@ Requisitos: **Android Studio** (Ladybug o superior, trae JDK 17) y Android SDK 3
   falta una tasa, el importe no se suma y el PDF lo avisa. Se comparte con el
   selector del sistema, sin subir nada.
 - **Borrar todos los movimientos** con confirmación.
+- **Ayuda → Ver tutorial**: repite el tutorial de bienvenida cuando quieras.
 - **Acerca de**: creador y versión visibles.
 - Seguridad local: contraseña PBKDF2; sin bloqueo biométrico.
 
@@ -165,8 +182,9 @@ app/src/main/java/com/suarezmillan/finanzas/
 │   └── repo/                   # Txn, Account, Budget, Category, ScheduledPayment, Auth
 ├── di/                         # Hilt: base de datos y bindings
 └── ui/
-    ├── RootGate.kt             # splash / login / app
+    ├── RootGate.kt             # splash / login / tutorial / app
     ├── auth/                   # AuthViewModel + AuthScreen
+    ├── onboarding/             # tutorial de bienvenida (4 pasos, por perfil)
     ├── FinanzasRoot.kt         # Scaffold, tabs, FAB, hoja de registro, diálogo de detalle
     ├── MainViewModel.kt        # estado único del MVP
     ├── home/                   # Hoy + StickerCard
@@ -205,6 +223,7 @@ app/src/main/java/com/suarezmillan/finanzas/
 | Cuenta creada al primer movimiento de cada divisa | Se evita pedir una configuración inicial y nunca se inventa un saldo o una cuenta. |
 | Calculadora de cambio separada del registro | Consultar una equivalencia no debe crear movimientos ni ensuciar el historial. |
 | `ExchangeMath` puro y tasa activa de la app | La conversión se prueba en JVM; la calculadora nunca inventa una tasa ni una equivalencia. |
+| Tutorial de bienvenida por `userId`, no global | Cada perfil local merece su propia introducción; saltarlo no se lo quita a otra cuenta. |
 
 ## Tests
 
@@ -231,13 +250,14 @@ app/src/main/java/com/suarezmillan/finanzas/
 - `MarketRateParsersTest` — euro de Frankfurter, ARS oficial y tabla global.
 - `LiveRateSettingsTest` — referencias, elección, base/secundaria y overrides
   sobreviven al reinicio.
+- `OnboardingSettingsTest` — el tutorial se recuerda por perfil y sobrevive al reinicio.
 - `EnvelopePeriodTest` — rangos mensuales, quincenales y semanales por calendario.
 - `EnvelopeCarryTest` — arrastre solo desde periodos completos, acumulación y
   ausencia de deuda negativa.
 - `HomeUiStateBudgetTest` — disponible como ingresos menos gastos, sin sumar
   límites de sobres.
 
-**118 tests, 0 fallos** en `:app:testDebugUnitTest`.
+**120 tests, 0 fallos** en `:app:testDebugUnitTest`.
 
 ## Qué falta (a propósito)
 
@@ -255,7 +275,7 @@ app/src/main/java/com/suarezmillan/finanzas/
 
 ## Versiones
 
-Versión de la app: **0.9.0** (`versionCode 8`).
+Versión de la app: **0.10.0** (`versionCode 9`).
 
 Fijadas a un set conservador y mutuamente compatible: Kotlin 2.0.21, AGP 8.7.3,
 Gradle 8.9, Compose BOM 2024.10.01, Room 2.6.1, Hilt 2.52, KSP 2.0.21-1.0.28,

@@ -90,6 +90,7 @@ fun FinanzasRoot(
     userName: String,
     userEmail: String,
     onLogout: () -> Unit,
+    onShowTutorial: () -> Unit,
     vm: MainViewModel = hiltViewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -417,6 +418,7 @@ fun FinanzasRoot(
                     onOpenRates = { showRates = true },
                     onExportCsv = { exportCsv() },
                     onExportPdf = { exportPdf() },
+                    onShowTutorial = onShowTutorial,
                     onClearMovements = { vm.clearAllMovements() },
                     onLogout = onLogout,
                 )

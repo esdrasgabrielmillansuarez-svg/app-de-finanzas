@@ -57,7 +57,9 @@ Referentes revisados: **Ivy Wallet** (open source, Kotlin + Compose + M3, el mej
 - **Modales sobre modales.** Registrar es *una* sheet, con todo dentro.
 - **Teclado del sistema para montos.** Siempre teclado propio, siempre en la mitad inferior.
 - **Confeti al pagar una factura.** Gamificación solo en metas de ahorro, nunca en obligaciones.
-- **Onboarding de 7 pantallas.** 2 pantallas: crear cuenta + divisa secundaria. Se puede saltar.
+- **Onboarding de 7 pantallas.** La configuración se limita a crear cuenta; el
+  tutorial de bienvenida son 4 pasos prescindibles que se pueden repetir desde
+  Ajustes.
 
 ---
 
@@ -269,6 +271,25 @@ La pantalla no crea movimientos, no toca el historial y no guarda el monto
 consultado. Usa `ExchangeMath` (JVM puro) sobre la tasa que ya resuelve
 `CurrencyRates` (manual > en vivo).
 
+### 5.8 Tutorial de bienvenida
+
+Se muestra **la primera vez de cada perfil local**, después del login y por
+encima de la app. Cuatro pasos con un icono, una idea y dos viñetas; **Saltar**
+en la esquina y **Siguiente / Empezar** abajo. Indicador de página tipo puntos y
+gesto de volver al paso anterior.
+
+1. **Privacidad offline.** Sin nube; conexión solo para tasas públicas.
+2. **Registro rápido + facturas.** Botón `+`, deshacer y OCR local en tanda.
+3. **Bimoneda + calculadora.** Referencia BCV/paralelo/USDT, tasa manual y
+   conversión USD ↔ VES que no registra nada.
+4. **Plan y control.** Sobres, pagos, recordatorios y exportación CSV/PDF.
+
+Reglas: no muestra cifras, tasas ni montos de ejemplo; se cierra con atrás
+(paso anterior o salir); se marca como visto **por `userId`**
+(`onboarding_seen_<userId>`), así que cada cuenta ve el suyo; y se puede repetir
+desde **Ajustes → Ayuda**. Si se interrumpe la app sin cerrarlo, vuelve a
+aparecer en el próximo arranque.
+
 ---
 
 ## 6. Bimoneda: las cinco reglas que evitan el desastre
@@ -401,6 +422,7 @@ Alineado con este documento:
 - **Apariencia**: modo claro/oscuro/sistema y seis temas con selector en vivo; el acento no altera la semántica de divisa. Persistido en `PreferenceStore`.
 - **Sticker contextual** en Hoy (`CoachEngine` + `StickerCard`) con rotación de variantes y mensajes de hito al guardar.
 - **Recordatorios** diarios de vencimientos con WorkManager + notificación resumen, permiso de notificaciones pedido solo cuando corresponde e interruptor en Ajustes.
+- **Tutorial de bienvenida** de 4 pasos tras el primer login de cada perfil, prescindible y repetible desde Ajustes → Ayuda. Sin datos inventados y con la marca guardada por `userId`.
 - Room v2 con siete entidades y migración `1 → 2` escrita a mano (nunca destructiva), tasa de cambio guardada **por transacción**.
 
 Deliberadamente pendiente: count-up animado del saldo, hápticos del teclado, bloqueo
