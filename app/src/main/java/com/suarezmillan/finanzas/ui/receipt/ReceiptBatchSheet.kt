@@ -47,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.suarezmillan.finanzas.core.money.MoneyFormat
@@ -76,6 +77,7 @@ fun ReceiptBatchSheet(
     onStartBreakdown: (String) -> Unit,
     onAddPart: (String) -> Unit,
     onPartAmount: (String, String, Long?) -> Unit,
+    onPartLabel: (String, String, String) -> Unit,
     onRemovePart: (String, String) -> Unit,
     onMerchant: (String, String) -> Unit,
     onCurrency: (String, String) -> Unit,
@@ -156,6 +158,7 @@ fun ReceiptBatchSheet(
                         onStartBreakdown = onStartBreakdown,
                         onAddPart = onAddPart,
                         onPartAmount = onPartAmount,
+                        onPartLabel = onPartLabel,
                         onRemovePart = onRemovePart,
                         onMerchant = onMerchant,
                         onCurrency = onCurrency,
@@ -235,6 +238,7 @@ private fun DraftCard(
     onStartBreakdown: (String) -> Unit,
     onAddPart: (String) -> Unit,
     onPartAmount: (String, String, Long?) -> Unit,
+    onPartLabel: (String, String, String) -> Unit,
     onRemovePart: (String, String) -> Unit,
     onMerchant: (String, String) -> Unit,
     onCurrency: (String, String) -> Unit,
@@ -354,6 +358,12 @@ private fun DraftCard(
                         Spacer(Modifier.height(4.dp))
                         draft.parts.forEachIndexed { partIndex, part ->
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                PartLabelField(
+                                    part = part,
+                                    onLabel = { onPartLabel(draft.id, part.id, it) },
+                                    modifier = Modifier.weight(1.2f),
+                                )
+                                Spacer(Modifier.width(6.dp))
                                 PartAmountField(
                                     part = part,
                                     currency = draft.currency,
@@ -469,6 +479,9 @@ private fun DraftCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+
+                    ReceiptDetailBlock(draft)
+
                     Text(
                         text = "Leída al ${(draft.confidence * 100).toInt()}%. Revisa antes de guardar.",
                         style = MaterialTheme.typography.labelSmall,
@@ -527,4 +540,76 @@ private fun PartAmountField(
         modifier = modifier,
         shape = MaterialTheme.shapes.small,
     )
+}
+
+/** Concepto de una línea del desglose; se puede corregir lo que leyó el OCR. */
+@Composable
+private fun PartLabelField(
+    part: ReceiptPart,
+    onLabel: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var text by rememberSaveable(part.id) { mutableStateOf(part.label) }
+    LaunchedEffect(part.label) {
+        if (text != part.label) text = part.label
+    }
+
+    OutlinedTextField(
+        value = text,
+        onValueChange = { raw ->
+            val clean = raw.take(40)
+            text = clean
+            onLabel(clean)
+        },
+        label = { Text("Concepto") },
+        singleLine = true,
+        modifier = modifier,
+        shape = MaterialTheme.shapes.small,
+        textStyle = MaterialTheme.typography.bodySmall,
+    )
+}
+
+/**
+ * Todos los valores leídos del comprobante (operación, banco, origen...) más
+ * subtotal, impuestos y descuento. Es informativo: el gasto guarda el total.
+ */
+@Composable
+private fun ReceiptDetailBlock(draft: ReceiptDraft) {
+    val summary = buildList {
+        draft.subtotalMinor?.let { add("Subtotal" to MoneyFormat.format(it, draft.currency)) }
+        draft.taxMinor?.let { add("Impuestos" to MoneyFormat.format(it, draft.currency)) }
+        draft.discountMinor?.let { add("Descuento" to "-" + MoneyFormat.format(it, draft.currency)) }
+    }
+    if (summary.isEmpty() && draft.details.isEmpty()) return
+
+    Spacer(Modifier.height(8.dp))
+    Text(
+        text = "Detalle leído",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(2.dp))
+    summary.forEach { (label, value) -> DetailRow(label, value) }
+    draft.details.forEach { DetailRow(it.label, it.value) }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1.4f),
+        )
+    }
 }

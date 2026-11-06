@@ -32,10 +32,22 @@ val CategoryHint.keywords: List<String>
 fun CategoryHint.matches(categoryName: String): Boolean =
     keywords.any { categoryName.contains(it, ignoreCase = true) }
 
+/** Un campo clave:valor del comprobante (`Operación: 007930190137`). */
+data class ReceiptDetail(
+    val label: String,
+    val value: String,
+)
+
+/** Una línea de concepto con su importe (`LECHE ENTERA 1L  1.250,00`). */
+data class ReceiptItem(
+    val label: String,
+    val amountMinor: Long,
+)
+
 data class ReceiptAnalysis(
     val merchant: String?,
     val totalMinor: Long?,
-    /** Divisa detectada en el texto (`USD`, `EUR`), o null si solo hay `$`. */
+    /** Divisa detectada en el texto (`USD`, `EUR`, `VES`), o null si solo hay `$`. */
     val currency: String?,
     val date: LocalDate?,
     val taxId: String?,
@@ -45,6 +57,13 @@ data class ReceiptAnalysis(
     val categoryHint: CategoryHint?,
     val warnings: List<String>,
     val rawText: String,
+    /** Todos los campos leídos del comprobante, en el orden en que aparecen. */
+    val details: List<ReceiptDetail> = emptyList(),
+    /** Conceptos con importe: el desglose real de la factura. */
+    val items: List<ReceiptItem> = emptyList(),
+    val subtotalMinor: Long? = null,
+    val taxMinor: Long? = null,
+    val discountMinor: Long? = null,
 ) {
     val hasTotal: Boolean get() = totalMinor != null
 }
@@ -87,12 +106,44 @@ object ReceiptParser {
         """(?:CUIT|C\.U\.I\.T\.?|RUC|RUT|NIT|RFC)[:\s.#\-]*(\d[\d.\-]{5,18}\d)""",
     )
 
-    private val ITEM_EXCLUDE = listOf("SUBTOTAL", "IVA", "CUIT", "RUC", "RUT", "NIT", "RFC", "FECHA", "TOTAL", "SALDO", "MONTO")
+    private val ITEM_EXCLUDE = listOf(
+        "SUBTOTAL", "SUB TOTAL", "IVA", "IMPUESTO", "IGV", "CUIT", "RUC", "RUT", "NIT", "RFC",
+        "FECHA", "HORA", "TOTAL", "SALDO", "MONTO", "IMPORTE", "A PAGAR", "OPERACI",
+        "IDENTIFICACI", "ORIGEN", "DESTINO", "BANCO", "REFERENCIA", "CUENTA", "BENEFICIARIO",
+        "TEL", "DESCUENTO", "REBAJA",
+    )
+
+    private val SUBTOTAL_KEYS = listOf("SUBTOTAL", "SUB TOTAL", "BASE IMPONIBLE")
+    private val TAX_KEYS = listOf("IVA", "IMPUESTO", "IGV")
+    private val DISCOUNT_KEYS = listOf("DESCUENTO", "REBAJA", "AHORRO")
+
+    /** Etiquetas que muchos comprobantes imprimen con o sin dos puntos. */
+    private val FIELD_LABELS = listOf(
+        "FECHA", "HORA", "OPERACIÓN", "OPERACION", "REFERENCIA", "IDENTIFICACIÓN",
+        "IDENTIFICACION", "CÉDULA", "CEDULA", "RIF", "ORIGEN", "DESTINO", "BANCO",
+        "CUENTA", "BENEFICIARIO", "TELÉFONO", "TELEFONO", "MONTO", "CONCEPTO", "TITULAR",
+    )
+
+    private val FIELD_WITH_COLON = Regex(
+        """^([A-Za-zÁÉÍÓÚÑÜ][A-Za-zÁÉÍÓÚÑÜáéíóúñü .]{1,24}?)\s*:\s*(.+)$""",
+    )
+
+    private val FIELD_KNOWN = Regex(
+        """^(${FIELD_LABELS.joinToString("|") { Regex.escape(it) }})\b[.:]?\s*(.+)$""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    private const val MAX_DETAILS = 16
+    private const val MAX_ITEMS = 20
 
     private val MERCHANT_STOPWORDS = listOf(
         "FACTURA", "TICKET", "RECIBO", "COMPROBANTE", "FECHA", "HORA", "CAJA", "CAJERO",
         "VENDEDOR", "TEL", "TELEFONO", "WWW", "HTTP", "DOMICILIO", "DIRECCION", "AVENIDA",
         "CALLE", "IVA", "CUIT", "RUC", "RUT", "NIT", "RFC", "SUBTOTAL", "TOTAL",
+        // Comprobantes de pago/transferencia: sus rótulos no son el comercio.
+        "OPERACIÓN", "OPERACION", "PAGOMÓVIL", "PAGOMOVIL", "TRANSFERENCIA", "PAGO",
+        "IDENTIFICACIÓN", "IDENTIFICACION", "ORIGEN", "DESTINO", "BANCO", "REFERENCIA",
+        "CUENTA", "BENEFICIARIO", "MONTO", "IMPORTE",
     )
 
     fun parse(
@@ -108,10 +159,14 @@ object ReceiptParser {
 
         val totalMinor = findTotal(lines)
         val date = findDate(lines)
-        val merchant = findMerchant(lines)
+        val details = findDetails(lines)
+        val merchant = findMerchant(lines) ?: bankMerchant(details)
         val currency = detectCurrency(upper) ?: defaultCurrency.takeIf { upper.contains("$") }
         val taxId = TAX_ID.find(upper)?.groupValues?.getOrNull(1)?.trim()
-        val items = countItems(lines)
+        val items = findItems(lines)
+        val subtotalMinor = findKeyedAmount(lines, SUBTOTAL_KEYS)
+        val taxMinor = findKeyedAmount(lines, TAX_KEYS)
+        val discountMinor = findKeyedAmount(lines, DISCOUNT_KEYS)
         val hint = hintFor(upper)
 
         val warnings = buildList {
@@ -133,11 +188,16 @@ object ReceiptParser {
             currency = currency,
             date = date,
             taxId = taxId,
-            itemsDetected = items,
+            itemsDetected = items.size,
             confidence = confidence,
             categoryHint = hint,
             warnings = warnings,
             rawText = text,
+            details = details,
+            items = items,
+            subtotalMinor = subtotalMinor,
+            taxMinor = taxMinor,
+            discountMinor = discountMinor,
         )
     }
 
@@ -169,13 +229,83 @@ object ReceiptParser {
     private fun amounts(line: String): List<Long> =
         AMOUNT.findAll(line).mapNotNull { parseAmount(it.value) }.toList()
 
-    /** Líneas con importe que no son totales, impuestos ni identificadores. */
-    private fun countItems(lines: List<String>): Int = lines.count { line ->
-        val upper = line.uppercase()
-        AMOUNT.containsMatchIn(line) &&
-            ITEM_EXCLUDE.none { upper.contains(it) } &&
-            !NUMERIC_DATE.containsMatchIn(line) &&
-            !TEXT_DATE.containsMatchIn(upper)
+    /**
+     * Todos los campos clave:valor del comprobante. Reconoce `Etiqueta: valor` y
+     * etiquetas conocidas sin dos puntos (`Fecha 05/09/2026`), que es como
+     * imprimen muchos bancos.
+     */
+    private fun findDetails(lines: List<String>): List<ReceiptDetail> {
+        val found = mutableListOf<ReceiptDetail>()
+        for (line in lines) {
+            val colon = FIELD_WITH_COLON.find(line)
+            val match = colon ?: FIELD_KNOWN.find(line) ?: continue
+            val label = match.groupValues[1].trim().trim('.', '-', '*').take(24)
+            val value = match.groupValues[2]
+                .replace(Regex("""\s{2,}"""), " ")
+                .trim()
+                .trim('.', '*', '|')
+                .take(80)
+            if (label.count { it.isLetter() } < 2) continue
+            if (value.none { it.isLetterOrDigit() }) continue
+            found += ReceiptDetail(label.replaceFirstChar { it.uppercase() }, value)
+            if (found.size >= MAX_DETAILS) break
+        }
+        // Una etiqueta repetida (dos "Fecha") no aporta: manda la primera.
+        return found.distinctBy { it.label.lowercase() }
+    }
+
+    /** Conceptos con importe: el desglose real de la factura. */
+    private fun findItems(lines: List<String>): List<ReceiptItem> {
+        val items = mutableListOf<ReceiptItem>()
+        for (line in lines) {
+            val upper = line.uppercase()
+            if (isExcludedItem(upper)) continue
+            if (NUMERIC_DATE.containsMatchIn(line) || TEXT_DATE.containsMatchIn(upper)) continue
+            val found = amounts(line)
+            if (found.isEmpty()) continue
+            val label = AMOUNT.replace(line, " ")
+                .replace('$', ' ')
+                .replace('€', ' ')
+                .replace(Regex("""(?i)\b(bs\.?s?|ves|usd|eur)\b"""), " ")
+                .replace(Regex("""\s{2,}"""), " ")
+                .trim()
+                .trim('-', '.', '*', ':', '·')
+            if (label.count { it.isLetter() } < 3) continue
+            items += ReceiptItem(label.take(40), found.last())
+            if (items.size >= MAX_ITEMS) break
+        }
+        return items
+    }
+
+    /** `TOTAL`, `IVA` o `TEL` no deben confundirse con palabras que los contienen. */
+    private fun isExcludedItem(upper: String): Boolean = ITEM_EXCLUDE.any { key ->
+        if (key.length <= 4) {
+            Regex("""\b${Regex.escape(key)}\b""").containsMatchIn(upper)
+        } else {
+            upper.contains(key)
+        }
+    }
+
+    /** Importe de una línea de subtotal, impuesto o descuento. */
+    private fun findKeyedAmount(lines: List<String>, keys: List<String>): Long? {
+        for (key in keys) {
+            val pattern = if (key.length <= 4) {
+                Regex("""\b${Regex.escape(key)}\b""")
+            } else {
+                null
+            }
+            lines.forEachIndexed { index, line ->
+                val upper = line.uppercase()
+                val matches = pattern?.containsMatchIn(upper) ?: upper.contains(key)
+                if (!matches) return@forEachIndexed
+                if (key == "IVA" && upper.contains("SIN IVA")) return@forEachIndexed
+                val same = amounts(line)
+                if (same.isNotEmpty()) return same.last()
+                val next = lines.getOrNull(index + 1)?.let { amounts(it).lastOrNull() }
+                if (next != null) return next
+            }
+        }
+        return null
     }
 
     private fun parseAmount(token: String): Long? {
@@ -244,11 +374,21 @@ object ReceiptParser {
         return null
     }
 
+    /** En un comprobante de pago el comercio útil es el banco destino. */
+    private fun bankMerchant(details: List<ReceiptDetail>): String? =
+        details.firstOrNull { it.label.equals("Banco", ignoreCase = true) }
+            ?.value
+            ?.replace(Regex("""^\d{3,4}\s*[-–]\s*"""), "")
+            ?.trim()
+            ?.takeIf { it.count { ch -> ch.isLetter() } >= 3 }
+            ?.take(40)
+
     // --------------------------------------------------------------- divisa / categoría
 
     private fun detectCurrency(upper: String): String? = when {
         upper.contains("US\$") || upper.contains("U\$S") || Regex("""\bUSD\b""").containsMatchIn(upper) -> "USD"
         upper.contains("€") || Regex("""\bEUR\b""").containsMatchIn(upper) -> "EUR"
+        Regex("""\bVES\b""").containsMatchIn(upper) || Regex("""\bBS\.?S?\b""").containsMatchIn(upper) -> "VES"
         else -> null
     }
 

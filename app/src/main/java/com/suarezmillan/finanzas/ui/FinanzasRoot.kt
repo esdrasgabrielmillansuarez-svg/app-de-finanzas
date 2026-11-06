@@ -499,6 +499,9 @@ fun FinanzasRoot(
                 onPartAmount = { id, partId, minor ->
                     vm.updateReceiptPart(id, partId, minor)
                 },
+                onPartLabel = { id, partId, label ->
+                    vm.updateReceiptPartLabel(id, partId, label)
+                },
                 onRemovePart = { id, partId -> vm.removeReceiptPart(id, partId) },
                 onMerchant = { id, text -> vm.updateReceiptMerchant(id, text) },
                 onCurrency = { id, code -> vm.updateReceiptCurrency(id, code) },

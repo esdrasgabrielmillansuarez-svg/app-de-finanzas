@@ -35,6 +35,18 @@ class ReceiptParserTest {
         TOTAL ......... 48,50 €
     """.trimIndent()
 
+    private val pagoMovil = """
+        Comprobante de operación
+        PagomóvilBDV Personas
+        5.000,00 Bs
+        Fecha: 06/11/2026
+        Operación: 007930190137
+        Identificación: 17626843
+        Origen: 0102****8936
+        Destino: 04145687412
+        Banco: 0105 - BANCO MERCANTIL
+    """.trimIndent()
+
     @Test
     fun `ticket de supermercado`() {
         val result = ReceiptParser.parse(superTicket)
@@ -72,6 +84,38 @@ class ReceiptParserTest {
 
         assertEquals(12_000L, result.totalMinor)
         assertEquals("USD", result.currency)
+    }
+
+    @Test
+    fun `comprobante de pago movil trae todos los campos`() {
+        val result = ReceiptParser.parse(pagoMovil, defaultCurrency = "VES")
+
+        assertEquals(500_000L, result.totalMinor)
+        assertEquals("VES", result.currency)
+        assertEquals(LocalDate.of(2026, 11, 6), result.date)
+        assertEquals("BANCO MERCANTIL", result.merchant)
+
+        val fields = result.details.associate { it.label to it.value }
+        assertEquals("06/11/2026", fields["Fecha"])
+        assertEquals("007930190137", fields["Operación"])
+        assertEquals("17626843", fields["Identificación"])
+        assertEquals("0102****8936", fields["Origen"])
+        assertEquals("04145687412", fields["Destino"])
+        assertEquals("0105 - BANCO MERCANTIL", fields["Banco"])
+        assertTrue(result.items.isEmpty())
+    }
+
+    @Test
+    fun `el desglose lee cada concepto con su importe`() {
+        val result = ReceiptParser.parse(superTicket)
+
+        assertEquals(2, result.items.size)
+        assertEquals("LECHE ENTERA 1L", result.items[0].label)
+        assertEquals(125_000L, result.items[0].amountMinor)
+        assertEquals("PAN DE MOLDE 500G", result.items[1].label)
+        assertEquals(85_000L, result.items[1].amountMinor)
+        assertEquals(210_000L, result.subtotalMinor)
+        assertEquals(36_446L, result.taxMinor)
     }
 
     @Test

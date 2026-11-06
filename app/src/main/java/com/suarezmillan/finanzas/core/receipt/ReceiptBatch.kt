@@ -1,5 +1,6 @@
 package com.suarezmillan.finanzas.core.receipt
 
+import com.suarezmillan.finanzas.core.money.MoneyFormat
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
@@ -25,11 +26,13 @@ data class ReceiptCategory(val id: String, val name: String)
  * Un importe del desglose de una factura (una línea del ticket).
  *
  * [id] es estable para que la UI conserve el texto que se está tecleando aunque
- * se quite otro importe de la lista.
+ * se quite otro importe de la lista. [label] es el concepto leído por el OCR
+ * (`LECHE ENTERA 1L`) y se puede corregir a mano.
  */
 data class ReceiptPart(
     val id: String,
     val amountMinor: Long = 0L,
+    val label: String = "",
 )
 
 /**
@@ -57,6 +60,12 @@ data class ReceiptDraft(
      * se guarda como **un solo gasto** con el total correcto.
      */
     val parts: List<ReceiptPart> = emptyList(),
+    /** Todos los campos leídos del comprobante (operación, banco, origen...). */
+    val details: List<ReceiptDetail> = emptyList(),
+    /** Subtotal, impuestos y descuento tal como los imprimió la factura. */
+    val subtotalMinor: Long? = null,
+    val taxMinor: Long? = null,
+    val discountMinor: Long? = null,
     /** El usuario lo quiere incluir en el guardado masivo. */
     val include: Boolean = true,
     val confidence: Float = 0f,
@@ -134,20 +143,63 @@ fun ReceiptDraft.withAnalysis(
     categories: List<ReceiptCategory>,
     now: Long,
     zone: ZoneId,
-): ReceiptDraft = copy(
-    status = ReceiptStatus.READY,
-    amountMinor = analysis.totalMinor,
-    // El OCR propone un total único; si el usuario luego desglosa, manda el desglose.
-    parts = emptyList(),
-    currency = receiptCurrency(analysis.currency, baseCurrency, secondaryCurrency),
-    merchant = analysis.merchant?.trim()?.take(40)?.takeIf { it.isNotBlank() },
-    categoryId = suggestCategory(analysis.categoryHint, categories),
-    occurredAt = receiptOccurredAt(analysis.date, zone, now),
-    include = true,
-    confidence = analysis.confidence,
-    warnings = analysis.warnings,
-    error = null,
-)
+): ReceiptDraft {
+    val parts = detailedParts(analysis)
+    val mismatch = analysis.items.isNotEmpty() && parts.isEmpty()
+    return copy(
+        status = ReceiptStatus.READY,
+        amountMinor = analysis.totalMinor,
+        // Si el OCR leyó el desglose completo, se carga entero; si no cuadra con
+        // el total, se deja el importe único para que el usuario decida.
+        parts = parts,
+        currency = receiptCurrency(analysis.currency, baseCurrency, secondaryCurrency),
+        merchant = analysis.merchant?.trim()?.take(40)?.takeIf { it.isNotBlank() },
+        categoryId = suggestCategory(analysis.categoryHint, categories),
+        occurredAt = receiptOccurredAt(analysis.date, zone, now),
+        include = true,
+        confidence = analysis.confidence,
+        warnings = if (mismatch) {
+            analysis.warnings + "El desglose leído no cuadra con el total: revísalo"
+        } else {
+            analysis.warnings
+        },
+        error = null,
+        details = analysis.details,
+        subtotalMinor = analysis.subtotalMinor,
+        taxMinor = analysis.taxMinor,
+        discountMinor = analysis.discountMinor,
+    )
+}
+
+/**
+ * Desglose completo leído por el OCR. Solo se usa cuando la suma cuadra con el
+ * total: un desglose que no cuadra guardaría un gasto con el importe equivocado.
+ *
+ * Si los conceptos suman el subtotal, se añaden impuestos y descuento para
+ * llegar al total impreso.
+ */
+fun detailedParts(analysis: ReceiptAnalysis): List<ReceiptPart> {
+    val total = analysis.totalMinor ?: return emptyList()
+    val items = analysis.items.take(MAX_RECEIPT_PARTS)
+    if (items.isEmpty()) return emptyList()
+
+    val base = items.map { item ->
+        ReceiptPart(UUID.randomUUID().toString(), item.amountMinor, item.label.take(40))
+    }
+    if (base.sumOf { it.amountMinor } == total) return base
+
+    val withTax = analysis.taxMinor?.takeIf { it > 0L }?.let { tax ->
+        base + ReceiptPart(UUID.randomUUID().toString(), tax, "Impuestos")
+    } ?: base
+    if (withTax.sumOf { it.amountMinor } == total) return withTax
+
+    val withDiscount = analysis.discountMinor?.takeIf { it > 0L }?.let { discount ->
+        withTax + ReceiptPart(UUID.randomUUID().toString(), -discount, "Descuento")
+    } ?: withTax
+    if (withDiscount.sumOf { it.amountMinor } == total) return withDiscount
+
+    return emptyList()
+}
 
 /** Primera categoría del usuario (en su orden) cuyo nombre encaja con la pista del OCR. */
 fun suggestCategory(hint: CategoryHint?, categories: List<ReceiptCategory>): String? {
@@ -183,6 +235,31 @@ fun ReceiptDraft.withPartAmount(partId: String, amountMinor: Long?): ReceiptDraf
         if (part.id == partId) part.copy(amountMinor = amountMinor?.coerceAtLeast(0L) ?: 0L) else part
     },
 )
+
+/** Corrige el concepto de una línea del desglose. */
+fun ReceiptDraft.withPartLabel(partId: String, label: String): ReceiptDraft = copy(
+    parts = parts.map { part ->
+        if (part.id == partId) part.copy(label = label.take(40)) else part
+    },
+)
+
+/**
+ * Detalle legible para guardarlo como nota del movimiento: todos los campos del
+ * comprobante y, si hay, el desglose con conceptos.
+ */
+fun ReceiptDraft.detailsNote(): String? {
+    val fields = details.joinToString(" · ") { "${it.label}: ${it.value}" }
+    val lines = parts
+        .filter { it.label.isNotBlank() }
+        .joinToString(" · ") { "${it.label}: ${MoneyFormat.format(it.amountMinor, currency)}" }
+    return buildString {
+        if (fields.isNotBlank()) append(fields)
+        if (lines.isNotBlank()) {
+            if (isNotEmpty()) append('\n')
+            append("Desglose: ").append(lines)
+        }
+    }.take(900).takeIf { it.isNotBlank() }
+}
 
 /** Quita una línea del desglose. Sin líneas, vuelve a mandar [amountMinor]. */
 fun ReceiptDraft.withoutPart(partId: String): ReceiptDraft =

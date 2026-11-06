@@ -22,7 +22,9 @@ import com.suarezmillan.finanzas.core.receipt.withAnalysis
 import com.suarezmillan.finanzas.core.receipt.withBreakdown
 import com.suarezmillan.finanzas.core.receipt.withPartAdded
 import com.suarezmillan.finanzas.core.receipt.withPartAmount
+import com.suarezmillan.finanzas.core.receipt.withPartLabel
 import com.suarezmillan.finanzas.core.receipt.withoutPart
+import com.suarezmillan.finanzas.core.receipt.detailsNote
 import com.suarezmillan.finanzas.core.reminder.ReminderScheduler
 import com.suarezmillan.finanzas.core.settings.AppSettings
 import com.suarezmillan.finanzas.core.settings.ThemeMode
@@ -408,6 +410,7 @@ class MainViewModel @Inject constructor(
         merchant: String?,
         accountId: String? = null,
         occurredAt: Long = System.currentTimeMillis(),
+        note: String? = null,
     ): TxnEntity {
         val base = settings.baseCurrency.value
         val isBase = currency.equals(base, ignoreCase = true)
@@ -421,6 +424,7 @@ class MainViewModel @Inject constructor(
             accountId = account,
             categoryId = categoryId,
             merchant = merchant,
+            note = note,
             occurredAt = occurredAt,
             fxRateToBase = fx,
             fxBaseCurrency = base,
@@ -627,6 +631,9 @@ class MainViewModel @Inject constructor(
     fun updateReceiptPart(id: String, partId: String, amountMinor: Long?) =
         updateReceipt(id) { it.withPartAmount(partId, amountMinor) }
 
+    fun updateReceiptPartLabel(id: String, partId: String, label: String) =
+        updateReceipt(id) { it.withPartLabel(partId, label) }
+
     fun removeReceiptPart(id: String, partId: String) =
         updateReceipt(id) { it.withoutPart(partId) }
 
@@ -670,6 +677,7 @@ class MainViewModel @Inject constructor(
                         categoryId = draft.categoryId,
                         merchant = draft.merchant?.trim()?.takeIf { it.isNotBlank() },
                         occurredAt = draft.occurredAt,
+                        note = draft.detailsNote(),
                     )
                 }
                 saved.forEach { txnRepository.add(it) }

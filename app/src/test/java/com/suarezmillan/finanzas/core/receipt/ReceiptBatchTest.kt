@@ -24,17 +24,27 @@ class ReceiptBatchTest {
         date: LocalDate? = null,
         hint: CategoryHint? = CategoryHint.SUPER,
         confidence: Float = 0.9f,
+        items: List<ReceiptItem> = emptyList(),
+        details: List<ReceiptDetail> = emptyList(),
+        subtotalMinor: Long? = null,
+        taxMinor: Long? = null,
+        discountMinor: Long? = null,
     ) = ReceiptAnalysis(
         merchant = merchant,
         totalMinor = totalMinor,
         currency = currency,
         date = date,
         taxId = null,
-        itemsDetected = 3,
+        itemsDetected = items.size,
         confidence = confidence,
         categoryHint = hint,
         warnings = emptyList(),
         rawText = "",
+        details = details,
+        items = items,
+        subtotalMinor = subtotalMinor,
+        taxMinor = taxMinor,
+        discountMinor = discountMinor,
     )
 
     private fun draft() = newReceiptDraft(
@@ -258,6 +268,114 @@ class ReceiptBatchTest {
 
         assertTrue(cleared.parts.isEmpty())
         assertEquals(150_000L, cleared.totalMinor)
+    }
+
+    @Test
+    fun `el desglose se precarga con todas las lineas leidas`() {
+        val analyzed = draft().withAnalysis(
+            analysis = analysis(
+                totalMinor = 210_000L,
+                items = listOf(
+                    ReceiptItem("LECHE ENTERA 1L", 125_000L),
+                    ReceiptItem("PAN DE MOLDE 500G", 85_000L),
+                ),
+            ),
+            baseCurrency = "VES",
+            secondaryCurrency = "USD",
+            categories = categories,
+            now = now,
+            zone = zone,
+        )
+
+        assertEquals(2, analyzed.parts.size)
+        assertEquals(listOf("LECHE ENTERA 1L", "PAN DE MOLDE 500G"), analyzed.parts.map { it.label })
+        assertEquals(210_000L, analyzed.totalMinor)
+        assertTrue(analyzed.hasRequiredData)
+        assertTrue(analyzed.warnings.isEmpty())
+    }
+
+    @Test
+    fun `impuestos y descuento completan el total leido`() {
+        val analyzed = draft().withAnalysis(
+            analysis = analysis(
+                totalMinor = 121_000L,
+                items = listOf(ReceiptItem("PRODUCTO", 100_000L)),
+                taxMinor = 21_000L,
+            ),
+            baseCurrency = "VES",
+            secondaryCurrency = "USD",
+            categories = categories,
+            now = now,
+            zone = zone,
+        )
+
+        assertEquals(2, analyzed.parts.size)
+        assertEquals("Impuestos", analyzed.parts.last().label)
+        assertEquals(121_000L, analyzed.totalMinor)
+    }
+
+    @Test
+    fun `un desglose que no cuadra deja el importe unico y avisa`() {
+        val analyzed = draft().withAnalysis(
+            analysis = analysis(
+                totalMinor = 210_000L,
+                items = listOf(ReceiptItem("PRODUCTO", 100_000L)),
+            ),
+            baseCurrency = "VES",
+            secondaryCurrency = "USD",
+            categories = categories,
+            now = now,
+            zone = zone,
+        )
+
+        assertTrue(analyzed.parts.isEmpty())
+        assertEquals(210_000L, analyzed.totalMinor)
+        assertTrue(analyzed.warnings.any { it.contains("no cuadra") })
+    }
+
+    @Test
+    fun `el concepto de una linea se puede corregir`() {
+        val ready = draft().withAnalysis(
+            analysis = analysis(
+                totalMinor = 150_000L,
+                items = listOf(ReceiptItem("LECHE", 150_000L)),
+            ),
+            baseCurrency = "VES",
+            secondaryCurrency = "USD",
+            categories = categories,
+            now = now,
+            zone = zone,
+        )
+
+        val edited = ready.withPartLabel(ready.parts.first().id, "Leche entera")
+
+        assertEquals("Leche entera", edited.parts.first().label)
+        assertEquals(150_000L, edited.totalMinor)
+    }
+
+    @Test
+    fun `la nota guarda todos los campos y el desglose`() {
+        val ready = draft().withAnalysis(
+            analysis = analysis(
+                totalMinor = 150_000L,
+                items = listOf(ReceiptItem("LECHE", 150_000L)),
+                details = listOf(
+                    ReceiptDetail("Operación", "007930190137"),
+                    ReceiptDetail("Banco", "BANCO MERCANTIL"),
+                ),
+            ),
+            baseCurrency = "VES",
+            secondaryCurrency = "USD",
+            categories = categories,
+            now = now,
+            zone = zone,
+        )
+
+        val note = ready.detailsNote().orEmpty()
+
+        assertTrue(note.contains("Operación: 007930190137"))
+        assertTrue(note.contains("Banco: BANCO MERCANTIL"))
+        assertTrue(note.contains("Desglose: LECHE"))
     }
 
     @Test
