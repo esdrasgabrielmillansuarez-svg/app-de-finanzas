@@ -265,15 +265,19 @@ fun ReceiptDraft.withPartLabel(partId: String, label: String): ReceiptDraft = co
  *
  * Un PagoMóvil se guarda con un campo por línea, para poder reconstruir la
  * operación (número, cédula, origen, destino y banco) desde el detalle del gasto.
+ * Si el usuario parte el monto, el desglose se añade al final.
  */
 fun ReceiptDraft.detailsNote(): String? {
-    pagoMovil?.note()?.let { return it.take(900) }
+    val header = pagoMovil?.note()
     val fields = details.joinToString(" · ") { "${it.label}: ${it.value}" }
     val lines = parts
         .filter { it.label.isNotBlank() }
         .joinToString(" · ") { "${it.label}: ${MoneyFormat.format(it.amountMinor, currency)}" }
     return buildString {
-        if (fields.isNotBlank()) append(fields)
+        when {
+            header != null -> append(header)
+            fields.isNotBlank() -> append(fields)
+        }
         if (lines.isNotBlank()) {
             if (isNotEmpty()) append('\n')
             append("Desglose: ").append(lines)

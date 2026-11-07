@@ -456,6 +456,48 @@ class ReceiptBatchTest {
     }
 
     @Test
+    fun `un pago movil tambien se puede desglosar`() {
+        val pago = PagoMovilData(
+            amountMinor = 500_000L,
+            operation = "007930190137",
+            destination = "04145687412",
+            bankCode = "0105",
+            bankName = "BANCO MERCANTIL",
+        )
+        val ready = draft().withAnalysis(
+            analysis = analysis(
+                totalMinor = 500_000L,
+                merchant = "PagoMóvil 04145687412",
+                hint = null,
+                pagoMovil = pago,
+            ),
+            baseCurrency = "VES",
+            secondaryCurrency = "USD",
+            categories = categories,
+            now = now,
+            zone = zone,
+        )
+
+        val breakdown = ready.withBreakdown()
+        assertEquals(1, breakdown.parts.size)
+        assertEquals(500_000L, breakdown.totalMinor)
+
+        val added = breakdown.withPartAdded()
+        val first = added.parts.first().id
+        val second = added.parts.last().id
+        val split = added
+            .withPartAmount(first, 300_000L)
+            .withPartLabel(first, "Servicio")
+            .withPartAmount(second, 200_000L)
+            .withPartLabel(second, "Propina")
+
+        assertEquals(2, split.parts.size)
+        assertEquals(500_000L, split.totalMinor)
+        assertTrue(split.isPagoMovil)
+        assertTrue(split.detailsNote().orEmpty().contains("Desglose: Servicio"))
+    }
+
+    @Test
     fun `el desglose respeta el tope de lineas`() {
         var breakdown = draft().withBreakdown()
         repeat(MAX_RECEIPT_PARTS + 5) { breakdown = breakdown.withPartAdded() }

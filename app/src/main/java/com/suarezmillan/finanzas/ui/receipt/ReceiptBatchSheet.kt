@@ -341,16 +341,14 @@ private fun DraftCard(
                             modifier = Modifier.fillMaxWidth(),
                             shape = MaterialTheme.shapes.small,
                         )
-                        if (!draft.isPagoMovil) {
-                            TextButton(onClick = { onStartBreakdown(draft.id) }) {
-                                Icon(
-                                    Icons.Rounded.Add,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Text("Sumar varios montos")
-                            }
+                        TextButton(onClick = { onStartBreakdown(draft.id) }) {
+                            Icon(
+                                Icons.Rounded.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("Sumar varios montos")
                         }
                     } else {
                         Text(
