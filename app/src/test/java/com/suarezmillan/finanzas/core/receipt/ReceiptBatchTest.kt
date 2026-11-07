@@ -29,6 +29,7 @@ class ReceiptBatchTest {
         subtotalMinor: Long? = null,
         taxMinor: Long? = null,
         discountMinor: Long? = null,
+        pagoMovil: PagoMovilData? = null,
     ) = ReceiptAnalysis(
         merchant = merchant,
         totalMinor = totalMinor,
@@ -45,6 +46,7 @@ class ReceiptBatchTest {
         subtotalMinor = subtotalMinor,
         taxMinor = taxMinor,
         discountMinor = discountMinor,
+        pagoMovil = pagoMovil,
     )
 
     private fun draft() = newReceiptDraft(
@@ -376,6 +378,81 @@ class ReceiptBatchTest {
         assertTrue(note.contains("Operación: 007930190137"))
         assertTrue(note.contains("Banco: BANCO MERCANTIL"))
         assertTrue(note.contains("Desglose: LECHE"))
+    }
+
+    @Test
+    fun `un pago movil se carga completo y siempre en bolivares`() {
+        val pago = PagoMovilData(
+            amountMinor = 500_000L,
+            date = LocalDate.of(2026, 11, 6),
+            operation = "007930190137",
+            idNumber = "17626843",
+            origin = "0102****8936",
+            destination = "04145687412",
+            bankCode = "0105",
+            bankName = "BANCO MERCANTIL",
+        )
+        val analyzed = draft().withAnalysis(
+            analysis = analysis(
+                totalMinor = 500_000L,
+                merchant = "PagoMóvil 04145687412",
+                currency = "USD", // el comprobante manda: un PagoMóvil es VES
+                hint = null,
+                pagoMovil = pago,
+            ),
+            baseCurrency = "VES",
+            secondaryCurrency = "USD",
+            categories = categories,
+            now = now,
+            zone = zone,
+        )
+
+        assertEquals("VES", analyzed.currency)
+        assertEquals(500_000L, analyzed.totalMinor)
+        assertEquals("PagoMóvil 04145687412", analyzed.merchant)
+        assertTrue(analyzed.isPagoMovil)
+        assertTrue(analyzed.parts.isEmpty())
+        assertEquals(7, analyzed.details.size)
+        assertNull(analyzed.categoryId)
+        assertTrue(analyzed.needsReview)
+    }
+
+    @Test
+    fun `la nota de un pago movil guarda todos los campos`() {
+        val pago = PagoMovilData(
+            amountMinor = 500_000L,
+            date = LocalDate.of(2026, 11, 6),
+            operation = "007930190137",
+            idNumber = "17626843",
+            origin = "0102****8936",
+            destination = "04145687412",
+            bankCode = "0105",
+            bankName = "BANCO MERCANTIL",
+        )
+        val analyzed = draft().withAnalysis(
+            analysis = analysis(
+                totalMinor = 500_000L,
+                merchant = "PagoMóvil 04145687412",
+                hint = null,
+                pagoMovil = pago,
+            ),
+            baseCurrency = "VES",
+            secondaryCurrency = "USD",
+            categories = categories,
+            now = now,
+            zone = zone,
+        )
+
+        val note = analyzed.detailsNote().orEmpty()
+
+        assertTrue(note.startsWith("PagoMóvil"))
+        assertTrue(note.contains("Monto: Bs. 5.000,00"))
+        assertTrue(note.contains("Fecha: 06/11/2026"))
+        assertTrue(note.contains("Operación: 007930190137"))
+        assertTrue(note.contains("Identificación: 17626843"))
+        assertTrue(note.contains("Origen: 0102****8936"))
+        assertTrue(note.contains("Destino: 04145687412"))
+        assertTrue(note.contains("Banco: 0105 - BANCO MERCANTIL"))
     }
 
     @Test

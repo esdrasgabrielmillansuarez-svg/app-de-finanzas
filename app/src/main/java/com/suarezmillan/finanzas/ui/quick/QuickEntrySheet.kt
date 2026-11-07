@@ -118,7 +118,7 @@ fun QuickEntrySheet(
                 OutlinedButton(onClick = { invoiceMenu = true }) {
                     Icon(Icons.Rounded.DocumentScanner, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Factura")
+                    Text("Comprobante")
                 }
                 DropdownMenu(
                     expanded = invoiceMenu,
@@ -156,9 +156,9 @@ fun QuickEntrySheet(
                 ) {
                     Text(
                         text = if (pendingReceipts == 1) {
-                            "🧾 1 factura por revisar"
+                            "🧾 1 comprobante por revisar"
                         } else {
-                            "🧾 $pendingReceipts facturas por revisar"
+                            "🧾 $pendingReceipts comprobantes por revisar"
                         },
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,

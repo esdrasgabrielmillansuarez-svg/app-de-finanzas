@@ -64,17 +64,24 @@ data class ReceiptAnalysis(
     val subtotalMinor: Long? = null,
     val taxMinor: Long? = null,
     val discountMinor: Long? = null,
+    /** Datos del comprobante si el documento es un PagoMóvil (o null). */
+    val pagoMovil: PagoMovilData? = null,
 ) {
     val hasTotal: Boolean get() = totalMinor != null
+
+    /** Un PagoMóvil no se desglosa por concepto: es un solo pago. */
+    val isPagoMovil: Boolean get() = pagoMovil != null
 }
 
 /**
- * Extrae los datos de una factura a partir del texto OCR.
+ * Extrae los datos de un comprobante a partir del texto OCR.
  *
  * Es **determinista y offline**: nada de modelos en la nube. Cualquier aparato
  * puede auditar por qué eligió un total. Si el OCR es basura, devuelve pocos
  * campos y `confidence` baja en vez de inventar.
  *
+ * Reconoce dos formas: facturas/tickets (con total y líneas de concepto) y
+ * comprobantes de PagoMóvil (con número de operación, origen, destino y banco).
  * Solo trabaja con texto: el OCR vive en `ReceiptScanner` (ML Kit).
  */
 object ReceiptParser {
@@ -136,6 +143,32 @@ object ReceiptParser {
     private const val MAX_DETAILS = 16
     private const val MAX_ITEMS = 20
 
+    // --------------------------------------------------------------- PagoMóvil
+
+    private val PAGO_MOVIL_TEXT = Regex("""PAGO\s*M[ÓO]VIL""")
+
+    private val PM_AMOUNT = listOf("MONTO", "IMPORTE")
+    private val PM_DATE = listOf("FECHA")
+    private val PM_OPERATION = listOf(
+        "N[ÚU]MERO\\s+DE\\s+OPERACI[ÓO]N",
+        "NRO\\.?\\s*OPERACI[ÓO]N",
+        "N[°º]\\s*OPERACI[ÓO]N",
+        "OPERACI[ÓO]N",
+        "REFERENCIA",
+    )
+    private val PM_ID = listOf("IDENTIFICACI[ÓO]N", "C[ÉE]DULA", "RIF")
+    private val PM_ORIGIN = listOf("CUENTA\\s+ORIGEN", "ORIGEN")
+    private val PM_DESTINATION = listOf("CUENTA\\s+DESTINO", "DESTINO", "TEL[ÉE]FONO")
+    private val PM_BANK = listOf("BANCO")
+    private val PM_CONCEPT = listOf("CONCEPTO", "MOTIVO")
+    private val PM_HOLDER = listOf("TITULAR", "BENEFICIARIO")
+
+    /** Unión de todas las etiquetas: sirve para no confundir un valor con un rótulo. */
+    private val PM_ANY_LABEL = Regex(
+        "(?iu)^(?:${(PM_AMOUNT + PM_DATE + PM_OPERATION + PM_ID + PM_ORIGIN +
+            PM_DESTINATION + PM_BANK + PM_CONCEPT + PM_HOLDER).joinToString("|")})(?!\\p{L})",
+    )
+
     private val MERCHANT_STOPWORDS = listOf(
         "FACTURA", "TICKET", "RECIBO", "COMPROBANTE", "FECHA", "HORA", "CAJA", "CAJERO",
         "VENDEDOR", "TEL", "TELEFONO", "WWW", "HTTP", "DOMICILIO", "DIRECCION", "AVENIDA",
@@ -157,13 +190,21 @@ object ReceiptParser {
 
         val upper = lines.joinToString("\n").uppercase()
 
-        val totalMinor = findTotal(lines)
-        val date = findDate(lines)
-        val details = findDetails(lines)
-        val merchant = findMerchant(lines) ?: bankMerchant(details)
-        val currency = detectCurrency(upper) ?: defaultCurrency.takeIf { upper.contains("$") }
+        // Un PagoMóvil no es una factura: se extrae con su propio lector para no
+        // confundir el número de operación o el teléfono con importes.
+        val pagoMovil = findPagoMovil(lines)
+        val totalMinor = pagoMovil?.amountMinor ?: findTotal(lines)
+        val date = pagoMovil?.date ?: findDate(lines)
+        val details = pagoMovil?.fields()?.takeIf { it.isNotEmpty() } ?: findDetails(lines)
+        val merchant = pagoMovil?.merchantLabel()
+            ?: findMerchant(lines)
+            ?: bankMerchant(details)
+        val currency = when {
+            pagoMovil != null -> PAGO_MOVIL_CURRENCY
+            else -> detectCurrency(upper) ?: defaultCurrency.takeIf { upper.contains("$") }
+        }
         val taxId = TAX_ID.find(upper)?.groupValues?.getOrNull(1)?.trim()
-        val items = findItems(lines)
+        val items = if (pagoMovil != null) emptyList() else findItems(lines)
         val subtotalMinor = findKeyedAmount(lines, SUBTOTAL_KEYS)
         val taxMinor = findKeyedAmount(lines, TAX_KEYS)
         val discountMinor = findKeyedAmount(lines, DISCOUNT_KEYS)
@@ -174,12 +215,16 @@ object ReceiptParser {
             if (date == null) add("No se detectó la fecha")
             if (merchant == null) add("No se detectó el comercio")
             if (totalMinor != null && totalMinor <= 0L) add("Importe inválido")
+            if (pagoMovil != null && pagoMovil.operation == null) {
+                add("No se detectó el número de operación")
+            }
         }
 
         var confidence = 0.25f
         if (totalMinor != null) confidence += 0.40f
         if (date != null) confidence += 0.20f
         if (merchant != null) confidence += 0.15f
+        if (pagoMovil?.operation != null) confidence += 0.05f
         if (confidence > 0.95f) confidence = 0.95f
 
         return ReceiptAnalysis(
@@ -198,6 +243,7 @@ object ReceiptParser {
             subtotalMinor = subtotalMinor,
             taxMinor = taxMinor,
             discountMinor = discountMinor,
+            pagoMovil = pagoMovil,
         )
     }
 
@@ -306,6 +352,78 @@ object ReceiptParser {
             }
         }
         return null
+    }
+
+    // --------------------------------------------------------------- PagoMóvil
+
+    /**
+     * Lee un comprobante de PagoMóvil. Devuelve `null` si el texto no lo parece
+     * (una factura de compra normal no debe pasar por aquí).
+     *
+     * Tolera las variantes del OCR: `PagoMóvil`, `Pago Movil`, `PAGOMOVIL`,
+     * etiquetas con o sin dos puntos y valores impresos en la línea siguiente.
+     */
+    private fun findPagoMovil(lines: List<String>): PagoMovilData? {
+        if (lines.isEmpty()) return null
+        val flat = lines.joinToString(" ").uppercase()
+        if (!PAGO_MOVIL_TEXT.containsMatchIn(flat)) return null
+
+        val (bankCode, bankName) = splitBank(field(lines, PM_BANK))
+        return PagoMovilData(
+            amountMinor = amountFrom(field(lines, PM_AMOUNT)) ?: findTotal(lines),
+            date = findDate(lines),
+            operation = field(lines, PM_OPERATION)?.filterNot { it.isWhitespace() },
+            idNumber = field(lines, PM_ID)?.filterNot { it.isWhitespace() },
+            origin = field(lines, PM_ORIGIN)?.filterNot { it.isWhitespace() },
+            destination = field(lines, PM_DESTINATION)?.filterNot { it.isWhitespace() },
+            bankCode = bankCode,
+            bankName = bankName,
+            concept = field(lines, PM_CONCEPT),
+            holder = field(lines, PM_HOLDER),
+        )
+    }
+
+    /**
+     * Valor de la primera etiqueta encontrada. Si la etiqueta no trae valor en su
+     * línea, mira hasta dos líneas más abajo (ML Kit suele separarlos).
+     */
+    private fun field(lines: List<String>, labels: List<String>): String? {
+        val regex = Regex(
+            "(?iu)^(?:${labels.joinToString("|")})(?!\\p{L})\\s*[.:\\-–]?\\s*(.*)$",
+        )
+        lines.forEachIndexed { index, line ->
+            val match = regex.find(line.trim()) ?: return@forEachIndexed
+            cleanValue(match.groupValues[1])?.let { return it }
+            for (next in index + 1..minOf(index + 2, lines.lastIndex)) {
+                val candidate = lines[next].trim()
+                if (candidate.isEmpty()) continue
+                // Otro rótulo significa que este campo quedó vacío.
+                if (PM_ANY_LABEL.containsMatchIn(candidate)) break
+                cleanValue(candidate)?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun cleanValue(raw: String): String? = raw
+        .replace(Regex("""\s{2,}"""), " ")
+        .trim()
+        .trim('.', '*', '|', '-', '–', ':', ',')
+        .take(80)
+        .takeIf { value -> value.any { it.isLetterOrDigit() } }
+
+    private fun amountFrom(value: String?): Long? = value?.let { amounts(it).lastOrNull() }
+
+    /** `0105 - BANCO MERCANTIL` → código y nombre por separado. */
+    private fun splitBank(value: String?): Pair<String?, String?> {
+        val raw = value?.trim().orEmpty()
+        if (raw.isEmpty()) return null to null
+        val withCode = Regex("""^(\d{3,4})\s*[-–]?\s*(.+)$""").find(raw)
+        return if (withCode != null) {
+            withCode.groupValues[1] to withCode.groupValues[2].trim()
+        } else {
+            null to raw
+        }
     }
 
     private fun parseAmount(token: String): Long? {

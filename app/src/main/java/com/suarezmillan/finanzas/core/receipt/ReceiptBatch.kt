@@ -36,7 +36,7 @@ data class ReceiptPart(
 )
 
 /**
- * Una factura dentro de la bandeja de carga masiva.
+ * Un comprobante dentro de la bandeja de carga masiva.
  *
  * El OCR **propone** importe, comercio, divisa y categoría; el usuario confirma
  * antes de guardar. Nunca se crea un movimiento solo.
@@ -62,6 +62,8 @@ data class ReceiptDraft(
     val parts: List<ReceiptPart> = emptyList(),
     /** Todos los campos leídos del comprobante (operación, banco, origen...). */
     val details: List<ReceiptDetail> = emptyList(),
+    /** Datos estructurados si el comprobante es un PagoMóvil. */
+    val pagoMovil: PagoMovilData? = null,
     /** Subtotal, impuestos y descuento tal como los imprimió la factura. */
     val subtotalMinor: Long? = null,
     val taxMinor: Long? = null,
@@ -85,6 +87,9 @@ data class ReceiptDraft(
         get() = status == ReceiptStatus.READY &&
             (totalMinor ?: 0L) > 0L &&
             categoryId != null
+
+    /** Comprobante de PagoMóvil: un solo pago en bolívares, sin desglose. */
+    val isPagoMovil: Boolean get() = pagoMovil != null
 
     /** Lo que realmente se guardará al confirmar la bandeja. */
     val willSave: Boolean get() = hasRequiredData && include
@@ -146,14 +151,24 @@ fun ReceiptDraft.withAnalysis(
 ): ReceiptDraft {
     val parts = detailedParts(analysis)
     val mismatch = analysis.items.isNotEmpty() && parts.isEmpty()
+    val pagoMovil = analysis.pagoMovil
     return copy(
         status = ReceiptStatus.READY,
         amountMinor = analysis.totalMinor,
         // Si el OCR leyó el desglose completo, se carga entero; si no cuadra con
         // el total, se deja el importe único para que el usuario decida.
         parts = parts,
-        currency = receiptCurrency(analysis.currency, baseCurrency, secondaryCurrency),
-        merchant = analysis.merchant?.trim()?.take(40)?.takeIf { it.isNotBlank() },
+        // Un PagoMóvil siempre está en bolívares; el resto, en una de las dos
+        // divisas de la app.
+        currency = if (pagoMovil != null) {
+            PAGO_MOVIL_CURRENCY
+        } else {
+            receiptCurrency(analysis.currency, baseCurrency, secondaryCurrency)
+        },
+        merchant = (pagoMovil?.merchantLabel() ?: analysis.merchant)
+            ?.trim()
+            ?.take(40)
+            ?.takeIf { it.isNotBlank() },
         categoryId = suggestCategory(analysis.categoryHint, categories),
         occurredAt = receiptOccurredAt(analysis.date, zone, now),
         include = true,
@@ -164,7 +179,8 @@ fun ReceiptDraft.withAnalysis(
             analysis.warnings
         },
         error = null,
-        details = analysis.details,
+        details = pagoMovil?.fields()?.takeIf { it.isNotEmpty() } ?: analysis.details,
+        pagoMovil = pagoMovil,
         subtotalMinor = analysis.subtotalMinor,
         taxMinor = analysis.taxMinor,
         discountMinor = analysis.discountMinor,
@@ -246,8 +262,12 @@ fun ReceiptDraft.withPartLabel(partId: String, label: String): ReceiptDraft = co
 /**
  * Detalle legible para guardarlo como nota del movimiento: todos los campos del
  * comprobante y, si hay, el desglose con conceptos.
+ *
+ * Un PagoMóvil se guarda con un campo por línea, para poder reconstruir la
+ * operación (número, cédula, origen, destino y banco) desde el detalle del gasto.
  */
 fun ReceiptDraft.detailsNote(): String? {
+    pagoMovil?.note()?.let { return it.take(900) }
     val fields = details.joinToString(" · ") { "${it.label}: ${it.value}" }
     val lines = parts
         .filter { it.label.isNotBlank() }

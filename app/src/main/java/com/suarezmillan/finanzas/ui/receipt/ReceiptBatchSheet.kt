@@ -64,8 +64,8 @@ import com.suarezmillan.finanzas.ui.components.CategoryDialog
 import com.suarezmillan.finanzas.ui.quick.AmountParser
 
 /**
- * Bandeja de facturas: se cargan varias (cámara o galería), se leen en cola y
- * aquí se corrigen y confirman. Nada se guarda sin pulsar el botón final.
+ * Bandeja de comprobantes: se cargan varias (cámara o galería), se leen en cola
+ * y aquí se corrigen y confirman. Nada se guarda sin pulsar el botón final.
  */
 @Composable
 fun ReceiptBatchSheet(
@@ -116,10 +116,10 @@ fun ReceiptBatchSheet(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Facturas", style = MaterialTheme.typography.titleLarge)
+                Text("Comprobantes", style = MaterialTheme.typography.titleLarge)
                 Text(
                     text = when {
-                        drafts.isEmpty() -> "Sin fotos en la bandeja"
+                        drafts.isEmpty() -> "Sin comprobantes en la bandeja"
                         scanning > 0 -> "$scanning leyéndose · ${drafts.size} en total"
                         else -> "${drafts.size} en la bandeja · ${ready.size} listas"
                     },
@@ -137,7 +137,8 @@ fun ReceiptBatchSheet(
         if (drafts.isEmpty()) {
             Text(
                 text = "Toma una foto o elige varias de la galería. Se leen en el teléfono, " +
-                    "sin subir nada a internet, y se procesan una detrás de otra.",
+                    "sin subir nada a internet, y se procesan una detrás de otra. " +
+                    "Sirven facturas, tickets y comprobantes de PagoMóvil.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -284,7 +285,7 @@ private fun DraftCard(
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = draft.merchant?.takeIf { it.isNotBlank() } ?: "Factura ${index + 1}",
+                    text = draft.merchant?.takeIf { it.isNotBlank() } ?: "Comprobante ${index + 1}",
                     style = MaterialTheme.typography.labelLarge,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -298,7 +299,7 @@ private fun DraftCard(
                 IconButton(onClick = { onRemove(draft.id) }) {
                     Icon(
                         Icons.Rounded.DeleteOutline,
-                        contentDescription = "Quitar factura",
+                        contentDescription = "Quitar comprobante",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -307,7 +308,7 @@ private fun DraftCard(
             when (draft.status) {
                 ReceiptStatus.SCANNING -> {
                     Text(
-                        text = "Leyendo la factura…",
+                        text = "Leyendo el comprobante…",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -340,18 +341,20 @@ private fun DraftCard(
                             modifier = Modifier.fillMaxWidth(),
                             shape = MaterialTheme.shapes.small,
                         )
-                        TextButton(onClick = { onStartBreakdown(draft.id) }) {
-                            Icon(
-                                Icons.Rounded.Add,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text("Sumar varios montos")
+                        if (!draft.isPagoMovil) {
+                            TextButton(onClick = { onStartBreakdown(draft.id) }) {
+                                Icon(
+                                    Icons.Rounded.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text("Sumar varios montos")
+                            }
                         }
                     } else {
                         Text(
-                            text = "Montos de la factura",
+                            text = "Montos del comprobante",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -480,7 +483,11 @@ private fun DraftCard(
                         )
                     }
 
-                    ReceiptDetailBlock(draft)
+                    if (draft.isPagoMovil) {
+                        PagoMovilBlock(draft)
+                    } else {
+                        ReceiptDetailBlock(draft)
+                    }
 
                     Text(
                         text = "Leída al ${(draft.confidence * 100).toInt()}%. Revisa antes de guardar.",
@@ -566,6 +573,42 @@ private fun PartLabelField(
         modifier = modifier,
         shape = MaterialTheme.shapes.small,
         textStyle = MaterialTheme.typography.bodySmall,
+    )
+}
+
+/**
+ * Comprobante de PagoMóvil: muestra los datos de la operación tal como se
+ * guardarán en la nota del gasto. No hay desglose porque un pago no lo tiene.
+ */
+@Composable
+private fun PagoMovilBlock(draft: ReceiptDraft) {
+    val pago = draft.pagoMovil ?: return
+    // El monto ya se ve (y se edita) en el campo de arriba; repetirlo confunde
+    // si el usuario lo corrige.
+    val fields = pago.fields().filterNot { it.label == "Monto" }
+    if (fields.isEmpty()) return
+
+    Spacer(Modifier.height(8.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = "PagoMóvil",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = "comprobante de pago",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    Spacer(Modifier.height(2.dp))
+    fields.forEach { DetailRow(it.label, it.value) }
+    Spacer(Modifier.height(4.dp))
+    Text(
+        text = "Se guarda como un gasto en bolívares; todos estos datos quedan en la nota.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 

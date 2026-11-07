@@ -1,6 +1,8 @@
 package com.suarezmillan.finanzas.core.receipt
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -47,6 +49,19 @@ class ReceiptParserTest {
         Banco: 0105 - BANCO MERCANTIL
     """.trimIndent()
 
+    private val pagoMovilBanesco = """
+        BANESCO
+        Pago Movil
+        Monto: Bs. 1.234,56
+        Fecha 07/11/2026
+        Nro. Operación
+        001234567890
+        Cédula: V-12345678
+        Cuenta Origen: 0134****1234
+        Teléfono: 04120001122
+        Banco: 0134 Banesco Banco Universal
+    """.trimIndent()
+
     @Test
     fun `ticket de supermercado`() {
         val result = ReceiptParser.parse(superTicket)
@@ -89,13 +104,27 @@ class ReceiptParserTest {
     @Test
     fun `comprobante de pago movil trae todos los campos`() {
         val result = ReceiptParser.parse(pagoMovil, defaultCurrency = "VES")
+        val pago = result.pagoMovil
 
         assertEquals(500_000L, result.totalMinor)
         assertEquals("VES", result.currency)
         assertEquals(LocalDate.of(2026, 11, 6), result.date)
-        assertEquals("BANCO MERCANTIL", result.merchant)
+        assertEquals("PagoMóvil 04145687412", result.merchant)
+        assertTrue(result.isPagoMovil)
+
+        assertNotNull(pago)
+        assertEquals(500_000L, pago?.amountMinor)
+        assertEquals(LocalDate.of(2026, 11, 6), pago?.date)
+        assertEquals("007930190137", pago?.operation)
+        assertEquals("17626843", pago?.idNumber)
+        assertEquals("0102****8936", pago?.origin)
+        assertEquals("04145687412", pago?.destination)
+        assertEquals("0105", pago?.bankCode)
+        assertEquals("BANCO MERCANTIL", pago?.bankName)
+        assertEquals("0105 - BANCO MERCANTIL", pago?.bank)
 
         val fields = result.details.associate { it.label to it.value }
+        assertEquals("Bs. 5.000,00", fields["Monto"])
         assertEquals("06/11/2026", fields["Fecha"])
         assertEquals("007930190137", fields["Operación"])
         assertEquals("17626843", fields["Identificación"])
@@ -103,6 +132,45 @@ class ReceiptParserTest {
         assertEquals("04145687412", fields["Destino"])
         assertEquals("0105 - BANCO MERCANTIL", fields["Banco"])
         assertTrue(result.items.isEmpty())
+    }
+
+    @Test
+    fun `otro banco con valores en la linea siguiente`() {
+        val result = ReceiptParser.parse(pagoMovilBanesco, defaultCurrency = "VES")
+        val pago = result.pagoMovil
+
+        assertEquals(123_456L, result.totalMinor)
+        assertEquals("VES", result.currency)
+        assertEquals(LocalDate.of(2026, 11, 7), result.date)
+        assertEquals("001234567890", pago?.operation)
+        assertEquals("V-12345678", pago?.idNumber)
+        assertEquals("0134****1234", pago?.origin)
+        assertEquals("04120001122", pago?.destination)
+        assertEquals("0134", pago?.bankCode)
+        assertEquals("Banesco Banco Universal", pago?.bankName)
+        assertEquals("PagoMóvil 04120001122", result.merchant)
+    }
+
+    @Test
+    fun `un pago movil sin operacion avisa pero conserva lo leido`() {
+        val result = ReceiptParser.parse(
+            "PagoMóvil\nMonto: Bs. 100,00\nBanco: BANCO DE VENEZUELA",
+            defaultCurrency = "VES",
+        )
+
+        assertTrue(result.isPagoMovil)
+        assertEquals(10_000L, result.totalMinor)
+        assertNull(result.pagoMovil?.operation)
+        assertTrue(result.warnings.any { it.contains("operación", ignoreCase = true) })
+        assertEquals("BANCO DE VENEZUELA", result.merchant)
+    }
+
+    @Test
+    fun `una factura normal no se confunde con pago movil`() {
+        val result = ReceiptParser.parse(superTicket)
+
+        assertNull(result.pagoMovil)
+        assertFalse(result.isPagoMovil)
     }
 
     @Test
